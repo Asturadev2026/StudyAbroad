@@ -11,7 +11,7 @@ const app = express();
 app.use(cors({
   origin: [
     "http://localhost:5173",
-    "https://your-frontend.vercel.app"
+    "https://study-abroad-gilt.vercel.app"
   ]
 }));
 app.use(express.json());
