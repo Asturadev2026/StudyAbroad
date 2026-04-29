@@ -1,4 +1,8 @@
-const BASE_URL = "http://localhost:5000/api";
+const BASE_URL =
+  import.meta.env.VITE_API_URL ||
+  (window.location.hostname === "localhost"
+    ? "http://localhost:5000/api"
+    : "https://studyabroad-5j4o.onrender.com/api");
 
 export const getCountries = async () => {
   const res = await fetch(`${BASE_URL}/countries`);
