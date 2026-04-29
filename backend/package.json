@@ -1,12 +1,29 @@
 {
-  "name": "chatbot-backend",
+  "name": "study-abroad-chatbot-backend",
   "version": "1.0.0",
-  "main": "server.js",
+  "description": "Backend for Study Abroad Chatbot (CRM + AI + Flow Engine)",
+  "main": "app.js",
+  "type": "module",
+  "scripts": {
+    "start": "node app.js",
+    "dev": "nodemon app.js"
+  },
+  "keywords": [
+    "chatbot",
+    "study-abroad",
+    "nodejs",
+    "mysql",
+    "crm"
+  ],
+  "author": "",
+  "license": "ISC",
   "dependencies": {
-    "axios": "^1.6.0",
-    "cors": "^2.8.6",
-    "dotenv": "^17.4.1",
-    "express": "^4.22.1",
-    "openai": "^6.33.0"
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "mysql2": "^3.10.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.4"
   }
 }
