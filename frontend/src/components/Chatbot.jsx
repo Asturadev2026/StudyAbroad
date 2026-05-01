@@ -239,20 +239,20 @@ setVisibleOptions([]);
 setPage(0);
 setSelectedItems([]);
   try {
-    const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+    const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
-fetch(`${API_URL}/ai/counsellor`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        query: inputText,
-        context,
-      }),
-    });
+const response = await fetch(`${API_URL}/ai/counsellor`, {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({
+    query: inputText,
+    context,
+  }),
+});
 
-    const data = await res.json();
+const data = await response.json(); // ✅ FIX
 
     setMessages((prev) => [
       ...prev,
@@ -268,19 +268,28 @@ fetch(`${API_URL}/ai/counsellor`, {
 
   setInput(""); // ✅ FIX: clear input
 };
+
   const handleInput = async () => {
     if (!input.trim()) return;
 
-    const node = flow[step];
-
+     const node = step ? flow[step] : null;
+    if (!node) {
+  await handleAIFallback(input);
+  return;
+}
     if (allOptions.length > 0) {
       const match = matchUserInput(input);
 
   // 🔥 IMPORTANT: If it's a real question → bypass flow
   // 🔥 If input doesn't match options → ALWAYS use AI
-if (!match) {
+if (!match || isUserQuery(input)) {
   await handleAIFallback(input);
-  setOptions([]); // stop flow UI
+
+  setOptions([]);
+  setAllOptions([]);
+  setVisibleOptions([]);
+  setStep(null);
+
   return;
 }
       if (match) {
