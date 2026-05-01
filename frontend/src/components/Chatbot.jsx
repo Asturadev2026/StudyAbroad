@@ -1,6 +1,15 @@
 import React, { useState, useEffect, useRef } from "react";
 import flow from "../flow/flow";
+const cleanText = (text) => {
+  if (!text) return "";
 
+  return text
+    .replace(/\*\*/g, "")
+    .replace(/(\d+\.)/g, "\n$1")   // new line before numbers
+    .replace(/- /g, "• ")
+    .replace(/\n\s*\n/g, "\n")
+    .trim();
+};
 export default function Chatbot() {
   const [isOpen, setIsOpen] = useState(false);
   const [step, setStep] = useState(null);
@@ -65,7 +74,13 @@ export default function Chatbot() {
           ? node.message(context)
           : node.message;
 
-      setMessages((prev) => [...prev, { bot: msg }]);
+      setMessages((prev) => [...prev, {
+  bot: msg,
+  time: new Date().toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  }),
+}]);
     }
     // ✅ HANDLE CUSTOM RENDER STEP (NEW)
 if (node.type === "custom") {
@@ -189,7 +204,13 @@ if (!node.options && !node.type && !node.save && node.next) {
 
       setMessages((prev) => [
         ...prev,
-        { user: option.label },
+        {
+  user: option.label,
+  time: new Date().toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  }),
+},
       ]);
 
       return;
@@ -197,7 +218,13 @@ if (!node.options && !node.type && !node.save && node.next) {
 
     setMessages((prev) => [
       ...prev,
-      { user: option.label },
+      {
+  user: option.label,
+  time: new Date().toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  }),
+},
     ]);
 
     if (node.save) {
@@ -256,7 +283,13 @@ const data = await response.json(); // ✅ FIX
 
     setMessages((prev) => [
       ...prev,
-      { bot: data.answer },
+      {
+  bot: data.answer,
+  time: new Date().toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  }),
+},
     ]);
 
   } catch (err) {
@@ -266,23 +299,24 @@ const data = await response.json(); // ✅ FIX
     ]);
   }
 
-  setInput(""); // ✅ FIX: clear input
+  setInput(""); 
 };
 
   const handleInput = async () => {
     if (!input.trim()) return;
-
+     const inputText = input;  
+  setInput("");
      const node = step ? flow[step] : null;
     if (!node) {
   await handleAIFallback(input);
   return;
 }
     if (allOptions.length > 0) {
-      const match = matchUserInput(input);
+      const match = matchUserInput(inputText);
 
   // 🔥 IMPORTANT: If it's a real question → bypass flow
   // 🔥 If input doesn't match options → ALWAYS use AI
-if (!match || isUserQuery(input)) {
+if (!match || isUserQuery(inputText)) {
   await handleAIFallback(input);
 
   setOptions([]);
@@ -359,8 +393,32 @@ if (!match || isUserQuery(input)) {
     {isOpen && (
       <div ref={containerRef} style={styles.container}>
         <div style={styles.header}>
-          🎓 Study Abroad Assistant
-        </div>
+  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+    <span>🎓 Study Abroad Assistant</span>
+
+    <span
+      style={{ cursor: "pointer", fontSize: 18 }}
+      onClick={() => {
+  setMessages([]);
+  setContext({});
+  setOptions([]);
+  setAllOptions([]);
+  setVisibleOptions([]);
+  setSelectedItems([]);
+  setPage(0);
+
+  // 🔥 IMPORTANT: force re-init like first load
+  setStep(null);
+
+  setTimeout(() => {
+    setStep("start");
+  }, 0);
+}}
+    >
+      🔄
+    </span>
+  </div>
+</div>
 
         <div style={styles.chatBody}>
           {messages.map((m, i) => (
@@ -373,7 +431,10 @@ if (!match || isUserQuery(input)) {
             >
               {m.bot && (
                 <div style={styles.botCard}>
-                  <p>{m.bot}</p>
+                  <div style={{ whiteSpace: "pre-wrap", lineHeight: "1.5" }}>
+  {cleanText(m.bot)}
+</div>
+<div style={styles.time}>{m.time}</div>
 
                   {i === lastBotIndex &&
                     visibleOptions.length > 0 && (
@@ -432,8 +493,11 @@ if (!match || isUserQuery(input)) {
               )}
 
               {m.user && (
-                <div style={styles.userBubble}>{m.user}</div>
-              )}
+  <div style={styles.userBubble}>
+    <div>{m.user}</div>
+    <div style={styles.timeUser}>{m.time}</div>
+  </div>
+)}
             </div>
           ))}
 
@@ -481,8 +545,8 @@ const styles = {
     position: "fixed",
     bottom: 90,
     right: 20,
-    width: 350,
-    height: 550,
+    width: 460,
+    height: 600,
     background: "#f4f4f4",
     borderRadius: 25, // ✅ more rounded
     display: "flex",
@@ -491,12 +555,13 @@ const styles = {
   },
 
   header: {
-    background: "#000",
-    color: "#fff",
-    padding: 15,
-    borderTopLeftRadius: 25,
-    borderTopRightRadius: 25,
-  },
+  background: "#0B1F3A", // ✅ deep navy instead of pure black
+  color: "#fff",
+  padding: 15,
+  fontWeight: "600",
+  borderTopLeftRadius: 25,
+  borderTopRightRadius: 25,
+},
 
   chatBody: {
     flex: 1,
@@ -505,12 +570,13 @@ const styles = {
   },
 
   botCard: {
-    background: "#fff",
-    padding: 12,
-    borderRadius: "16px 16px 16px 4px", // ✅ chat style
-    marginBottom: 10,
-    maxWidth: "75%",
-  },
+  background: "#fff",
+  padding: 14,
+  borderRadius: "12px",
+  marginBottom: 10,
+  maxWidth: "85%", // ✅ wider text like ChatGPT
+  lineHeight: 1.5,
+},
 
   userBubble: {
     background: "#FFD700",
@@ -574,4 +640,16 @@ const styles = {
     borderRadius: 10,
     cursor: "pointer",
   },
+  time: {
+  fontSize: 10,
+  color: "#888",
+  marginTop: 4,
+},
+
+timeUser: {
+  fontSize: 10,
+  color: "#333",
+  marginTop: 4,
+  textAlign: "right",
+},
 };
