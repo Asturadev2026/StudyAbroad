@@ -110,10 +110,21 @@ student_qualification: {
   message: "What is your highest qualification?",
   save: "qualification",
   options: [
-    { label: "12th", next: "student_country" },
-    { label: "Graduate/Bachelors", next: "student_country" },
-    { label: "Post Graduate/Masters", next: "student_country" },
-    { label: "Diploma", next: "student_country" },
+    { label: "12th", next: "student_field" },
+    { label: "Graduate/Bachelors", next: "student_field" },
+    { label: "Post Graduate/Masters", next: "student_field" },
+    { label: "Diploma", next: "student_field" },
+  ],
+},
+
+student_field: {
+  message: "What do you want to study?",
+  save: "field",
+  options: [
+    { label: "Engineering / IT", next: "student_country" },
+    { label: "Business / MBA", next: "student_country" },
+    { label: "Agriculture", next: "student_country" },
+    { label: "Arts / Humanities", next: "student_country" },
   ],
 },
 
@@ -124,15 +135,152 @@ student_country: {
   multi: true,
   max: 3,
   action: async () => {
+    console.log("🌍 Fetching countries...");
     const data = await getCountries();
     return data.map((c) => ({
       label: c.name,
       value: c.id,
     }));
   },
-  next: "name_input",
+  next: "student_budget",
 },
 
+student_budget: {
+  message: "What is your budget?",
+  save: "budget",
+  options: [
+    { label: "Low (<10L/year)", next: "student_ielts" },
+    { label: "Medium (10–25L/year)", next: "student_ielts" },
+    { label: "High (25L+)", next: "student_ielts" },
+  ],
+},
+
+student_ielts: {
+  message: "Do you have IELTS/PTE score?",
+  save: "ieltsScore",
+  next: "student_intake",
+},
+
+student_intake: {
+  message: "When do you want to start?",
+  save: "intake",
+  options: [
+    { label: "Feb 2026", next: "student_goal" },
+    { label: "July 2026", next: "student_goal" },
+  ],
+},
+
+student_goal: {
+  message: "What is your goal?",
+  save: "goal",
+  options: [
+    { label: "Job abroad", next: "fetch_recommendations" },
+    { label: "PR", next: "fetch_recommendations" },
+    { label: "Higher studies", next: "fetch_recommendations" },
+    { label: "Career switch", next: "fetch_recommendations" },
+  ],
+},
+
+// 🚀 🔥 FIXED API STEP
+fetch_recommendations: {
+  message: "🔍 Finding best courses for you...",
+  type: "api",
+
+  action: async (context) => {
+    console.log("🚀 API STEP TRIGGERED");
+    console.log("🧠 USER DATA:", context);
+
+    try {
+      const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+
+fetch(`${API_URL}/api/ai/recommend`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(context),
+      });
+
+      console.log("📡 STATUS:", res.status);
+
+      const data = await res.json();
+
+      console.log("✅ FULL RESPONSE:", data);
+
+      // 🔥 CRITICAL FIX: RETURN FULL OBJECT
+      return {
+        courses: data.courses || [],
+        formatted: data.formatted || null,
+      };
+
+    } catch (err) {
+      console.error("❌ API ERROR:", err);
+
+      return {
+        courses: [],
+        formatted: null,
+      };
+    }
+  },
+
+  next: "show_recommendations",
+},
+
+
+// 🎯 DISPLAY RESULTS (FINAL FIXED)
+show_recommendations: {
+  type: "custom",
+
+  render: (_, context) => {
+  console.log("🎯 FULL CONTEXT:", context);
+
+  const apiResult = context?.__apiResult || {};
+  const formatted = apiResult.formatted;
+  const courses = apiResult.courses || [];
+
+  console.log("✨ FORMATTED:", formatted);
+  console.log("📊 COURSES:", courses);
+
+  // ✅ PRIMARY: LLM TEXT OUTPUT (CHATGPT STYLE)
+  if (typeof formatted === "string" && formatted.trim()) {
+    return `
+🎓 Recommended Courses for You:
+
+${formatted}
+`;
+  }
+
+  // ⚠️ FALLBACK: RAW VECTOR RESULTS
+  if (courses.length > 0) {
+    return `
+🎓 Top Course Recommendations:
+
+${courses.map((c, i) => `
+${i + 1}. ${c.title}
+⭐ ${(c.similarity * 100).toFixed(1)}%
+`).join("\n")}
+`;
+  }
+
+  // ❌ NOTHING FOUND
+  return "❌ No courses found. Try different inputs.";
+},
+
+  next: "restart_flow",
+},
+
+
+restart_flow: {
+  message: "Do you want to search again?",
+  options: [
+    { label: "Yes", next: "student_qualification" },
+    { label: "No", next: "end" },
+  ],
+},
+
+end: {
+  message: "🎉 Thank you! We’ll help you further via chat.",
+},
 // ---- PR ----
 
 pr_country: {
