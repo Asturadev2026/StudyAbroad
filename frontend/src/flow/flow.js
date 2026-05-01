@@ -193,19 +193,17 @@ fetch_recommendations: {
     try {
       const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
-fetch(`${API_URL}/api/ai/recommend`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(context),
-      });
+const response = await fetch(`${API_URL}/recommend`, {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify(context),
+});
 
-      console.log("📡 STATUS:", res.status);
+console.log("📡 STATUS:", response.status);
 
-      const data = await res.json();
-
-      console.log("✅ FULL RESPONSE:", data);
+const data = await response.json();
 
       // 🔥 CRITICAL FIX: RETURN FULL OBJECT
       return {

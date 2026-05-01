@@ -241,7 +241,7 @@ setSelectedItems([]);
   try {
     const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
-fetch(`${API_URL}/api/ai/counsellor`, {
+fetch(`${API_URL}/ai/counsellor`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
