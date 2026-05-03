@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import flow from "../flow/flow";
+
 const cleanText = (text) => {
   if (!text) return "";
 
@@ -10,7 +11,23 @@ const cleanText = (text) => {
     .replace(/\n\s*\n/g, "\n")
     .trim();
 };
+const streamText = (text, callback) => {
+  let i = 0;
+
+  const interval = setInterval(() => {
+    i += 1; // 🔥 slower typing
+
+    const isDone = i >= text.length;
+
+    callback(text.slice(0, i), isDone);
+
+    if (isDone) {
+      clearInterval(interval);
+    }
+  }, 25); // 🔥 human-visible speed
+};
 export default function Chatbot() {
+  const [isTyping, setIsTyping] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [step, setStep] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -89,25 +106,62 @@ if (node.type === "custom") {
 
     console.log("🎯 CUSTOM RENDER OUTPUT:", output);
 
-    setMessages((prev) => [...prev, { bot: output }]);
+    // 🔥 show typing dots first
+    setIsTyping(true);
+
+// 🔥 FORCE UI TO RENDER FIRST
+await new Promise((resolve) => setTimeout(resolve, 50));
+
+setTimeout(() => {
+  setIsTyping(false);
+
+  const tempMessage = {
+    bot: "",
+    time: new Date().toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    }),
+  };
+
+  setMessages((prev) => [...prev, tempMessage]);
+
+  setTimeout(() => {
+    streamText(output, (partial, done) => {
+      setMessages((prev) => {
+        const updated = [...prev];
+        updated[updated.length - 1].bot = partial;
+        return updated;
+      });
+
+      if (done && node.next) {
+        setStep(node.next);
+      }
+    });
+  }, 200);
+
+}, 800); // 👈 increase dots visibility (was 500) // delay so dots are visible
+
   } catch (err) {
     console.error("❌ Custom render error:", err);
     setMessages((prev) => [
       ...prev,
-      { bot: "❌ Failed to display results" },
+      {
+        bot: "❌ Failed to display results",
+        time: new Date().toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+      },
     ]);
   }
 
   // move to next step automatically
-  if (node.next) {
-    setTimeout(() => {
-      setStep(node.next);
-    }, 500);
-  }
+  
 
   return;
 }
-   // ✅ AUTO MOVE TO NEXT IF NO OPTIONS / NO TYPE
+
+// ✅ AUTO MOVE TO NEXT IF NO OPTIONS / NO TYPE
 // ✅ Only auto-skip if it's a pure routing node
 if (!node.options && !node.type && !node.save && node.next) {
   setTimeout(() => {
@@ -115,12 +169,12 @@ if (!node.options && !node.type && !node.save && node.next) {
   }, 500);
   return;
 }
-    if (node.options) {
-      setOptions(node.options);
-      setAllOptions(node.options);
-      setVisibleOptions(node.options.slice(0, PAGE_SIZE));
-    }
 
+if (node.options) {
+  setOptions(node.options);
+  setAllOptions(node.options);
+  setVisibleOptions(node.options.slice(0, PAGE_SIZE));
+}
     if (node.type === "dynamic") {
       setLoading(true);
       try {
@@ -258,48 +312,95 @@ const isUserQuery = (text) => {
 const handleAIFallback = async (inputText) => {
   setMessages((prev) => [
     ...prev,
-    { user: inputText },
+    {
+      user: inputText,
+      time: new Date().toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+    },
   ]);
+
   setOptions([]);
-setAllOptions([]);
-setVisibleOptions([]);
-setPage(0);
-setSelectedItems([]);
+  setAllOptions([]);
+  setVisibleOptions([]);
+  setPage(0);
+  setSelectedItems([]);
+
+  // 🔥 START typing indicator
+  setIsTyping(true);
+
   try {
-    const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+    const API_URL =
+      import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
-const response = await fetch(`${API_URL}/ai/counsellor`, {
-  method: "POST",
-  headers: {
-    "Content-Type": "application/json",
-  },
-  body: JSON.stringify({
-    query: inputText,
-    context,
-  }),
-});
+    const response = await fetch(`${API_URL}/ai/counsellor`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        query: inputText,
+        context,
+      }),
+    });
 
-const data = await response.json(); // ✅ FIX
+    const data = await response.json();
+
+    // 🔥 LET DOTS BE VISIBLE (IMPORTANT FIX)
+    await new Promise((resolve) => setTimeout(resolve, 700));
+
+    // 🔥 STOP dots
+    setIsTyping(false);
+
+    // 🔥 ADD EMPTY BOT MESSAGE
+    let tempMessage = {
+      bot: "",
+      time: new Date().toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+    };
+
+    setMessages((prev) => [...prev, tempMessage]);
+
+    // 🔥 SMALL DELAY BEFORE STREAMING (smooth UX)
+    setTimeout(() => {
+      streamText(data.answer, (partial, done) => {
+        setMessages((prev) => {
+          const updated = [...prev];
+          updated[updated.length - 1].bot = partial;
+          return updated;
+        });
+
+        // 🔥 RESTART FLOW AFTER STREAMING FINISHES
+        if (done) {
+  setTimeout(() => {
+    setStep(null);     // 🔥 RESET FIRST
+    setTimeout(() => {
+      setStep("start"); // 🔥 THEN START FLOW
+    }, 0);
+  }, 800);
+}
+      });
+    }, 200);
+
+  } catch (err) {
+    setIsTyping(false);
 
     setMessages((prev) => [
       ...prev,
       {
-  bot: data.answer,
-  time: new Date().toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-  }),
-},
-    ]);
-
-  } catch (err) {
-    setMessages((prev) => [
-      ...prev,
-      { bot: "⚠️ Something went wrong" },
+        bot: "⚠️ Something went wrong",
+        time: new Date().toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+      },
     ]);
   }
 
-  setInput(""); 
+  setInput(""); // ✅ keep this
 };
 
   const handleInput = async () => {
@@ -308,7 +409,10 @@ const data = await response.json(); // ✅ FIX
   setInput("");
      const node = step ? flow[step] : null;
     if (!node) {
-  await handleAIFallback(input);
+  await handleAIFallback(inputText);
+
+
+
   return;
 }
     if (allOptions.length > 0) {
@@ -317,12 +421,13 @@ const data = await response.json(); // ✅ FIX
   // 🔥 IMPORTANT: If it's a real question → bypass flow
   // 🔥 If input doesn't match options → ALWAYS use AI
 if (!match || isUserQuery(inputText)) {
-  await handleAIFallback(input);
+  await handleAIFallback(inputText);
 
   setOptions([]);
   setAllOptions([]);
   setVisibleOptions([]);
-  setStep(null);
+
+  
 
   return;
 }
@@ -433,6 +538,7 @@ if (!match || isUserQuery(inputText)) {
                 <div style={styles.botCard}>
                   <div style={{ whiteSpace: "pre-wrap", lineHeight: "1.5" }}>
   {cleanText(m.bot)}
+  
 </div>
 <div style={styles.time}>{m.time}</div>
 
@@ -501,7 +607,17 @@ if (!match || isUserQuery(inputText)) {
             </div>
           ))}
 
-          {loading && <p style={{ padding: 10 }}>Loading...</p>}
+          {isTyping && (
+  <div style={{ display: "flex", justifyContent: "flex-start" }}>
+    <div style={styles.botCard}>
+      <div style={{ display: "flex", gap: 6 }}>
+        <div style={styles.dot}></div>
+        <div style={styles.dot}></div>
+        <div style={styles.dot}></div>
+      </div>
+    </div>
+  </div>
+)}
           <div ref={chatRef}></div>
         </div>
 
@@ -651,5 +767,24 @@ timeUser: {
   color: "#333",
   marginTop: 4,
   textAlign: "right",
+},
+typing: {
+  display: "flex",
+  gap: 4,
+  padding: 10,
+},
+
+typingDot: {
+  width: 6,
+  height: 6,
+  background: "#999",
+  borderRadius: "50%",
+},
+dot: {
+  width: 8,
+  height: 8,
+  borderRadius: "50%",
+  background: "#555",
+  animation: "bounce 1.2s infinite",
 },
 };

@@ -191,19 +191,19 @@ fetch_recommendations: {
     console.log("🧠 USER DATA:", context);
 
     try {
-      const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+      const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
-const response = await fetch(`${API_URL}/recommend`, {
-  method: "POST",
-  headers: {
-    "Content-Type": "application/json",
-  },
-  body: JSON.stringify(context),
-});
+      const response = await fetch(`${API_URL}/recommend`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(context),
+      });
 
-console.log("📡 STATUS:", response.status);
+      console.log("📡 STATUS:", response.status);
 
-const data = await response.json();
+      const data = await response.json();
 
       // 🔥 CRITICAL FIX: RETURN FULL OBJECT
       return {
@@ -225,44 +225,41 @@ const data = await response.json();
 },
 
 
-// 🎯 DISPLAY RESULTS (FINAL FIXED)
+// 🎯 DISPLAY RESULTS (UPDATED WITH STREAM SUPPORT)
 show_recommendations: {
   type: "custom",
+  stream: true, // 🔥 ONLY ADDITION
 
   render: (_, context) => {
-  console.log("🎯 FULL CONTEXT:", context);
+    console.log("🎯 FULL CONTEXT:", context);
 
-  const apiResult = context?.__apiResult || {};
-  const formatted = apiResult.formatted;
-  const courses = apiResult.courses || [];
+    const apiResult = context?.__apiResult || {};
+    const formatted = apiResult.formatted;
+    const courses = apiResult.courses || [];
 
-  console.log("✨ FORMATTED:", formatted);
-  console.log("📊 COURSES:", courses);
+    console.log("✨ FORMATTED:", formatted);
+    console.log("📊 COURSES:", courses);
 
-  // ✅ PRIMARY: LLM TEXT OUTPUT (CHATGPT STYLE)
-  if (typeof formatted === "string" && formatted.trim()) {
-    return `
-🎓 Recommended Courses for You:
+    // ✅ PRIMARY: LLM TEXT OUTPUT (CHATGPT STYLE)
+    if (typeof formatted === "string" && formatted.trim()) {
+      return `🎓 Recommended Courses for You:
 
-${formatted}
-`;
-  }
+${formatted}`;
+    }
 
-  // ⚠️ FALLBACK: RAW VECTOR RESULTS
-  if (courses.length > 0) {
-    return `
-🎓 Top Course Recommendations:
+    // ⚠️ FALLBACK: RAW VECTOR RESULTS
+    if (courses.length > 0) {
+      return `🎓 Top Course Recommendations:
 
 ${courses.map((c, i) => `
 ${i + 1}. ${c.title}
 ⭐ ${(c.similarity * 100).toFixed(1)}%
-`).join("\n")}
-`;
-  }
+`).join("\n")}`;
+    }
 
-  // ❌ NOTHING FOUND
-  return "❌ No courses found. Try different inputs.";
-},
+    // ❌ NOTHING FOUND
+    return "❌ No courses found. Try different inputs.";
+  },
 
   next: "restart_flow",
 },
