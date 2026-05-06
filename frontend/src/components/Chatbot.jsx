@@ -524,7 +524,7 @@ if (!match || isUserQuery(inputText)) {
       <div ref={containerRef} style={styles.container}>
         <div style={styles.header}>
   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-    <span>🎓 Study Abroad Assistant</span>
+    <span>Global Stunel</span>
 
     <span
       style={{ cursor: "pointer", fontSize: 18 }}

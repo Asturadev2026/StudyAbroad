@@ -10,8 +10,14 @@ const flow = {
   start: {
     message: "What type of service do you want?",
     options: [
-      { label: "Onshore", next: "onshore_start" },
-      { label: "Offshore", next: "offshore_start" },
+      {
+        label: "Offshore - You are in India and want to go abroad",
+        next: "offshore_start",
+      },
+      {
+        label: "Onshore - You are already in that country",
+        next: "onshore_start",
+      },
     ],
   },
 
@@ -260,7 +266,6 @@ ${responseMessage ? `${responseMessage}\n` : ""}
 ${courses.map((c, i) => `
 ${i + 1}. ${c.course_name || c.title}
 📍 ${c.country || "Country details available on request"}
-⭐ ${c.match_score || Math.round((c.similarity || 0) * 100)}% Match
 💡 ${c.reason || "Recommended from available university program data."}
 `).join("\n")}`;
     }

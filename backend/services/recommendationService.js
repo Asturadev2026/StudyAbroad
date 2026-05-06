@@ -1019,7 +1019,6 @@ function buildPersonalizedTip(userInput, fallbackUsed) {
 function formatCourseItem(course, index) {
   return `${index + 1}. ${course.course_name}
 Country: ${course.country || "Country details available on request"}
-Match: ${course.match_score}%
 Reason: ${course.reason}`;
 }
 
