@@ -1,3 +1,4 @@
+import "../config/env.js";
 import OpenAI from "openai";
 import { searchSimilarDocs } from "./embeddingService.js";
 

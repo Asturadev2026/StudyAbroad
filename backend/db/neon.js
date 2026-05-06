@@ -1,7 +1,5 @@
 import { Pool } from "pg";
-import dotenv from "dotenv";
-
-dotenv.config();
+import "../config/env.js";
 
 export const neon = new Pool({
   connectionString: process.env.NEON_DB_URL,

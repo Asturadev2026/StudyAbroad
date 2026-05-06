@@ -1,46 +1,39 @@
 import express from "express";
 import { getRecommendations } from "../services/recommendationService.js";
-import { formatRecommendations } from "../services/recommendationFormatter.js";
 
-const router = express.Router(); // ✅ REQUIRED
+const router = express.Router();
 
 router.post("/recommend", async (req, res) => {
-  console.log("🚀 /recommend API HIT");
-
   try {
-    const userData = req.body;
-
-    console.log("🧠 USER DATA:", userData);
-
-    // 🔹 Step 1: RAG
-    const courses = await getRecommendations(userData);
-
-    console.log("📊 RAW COURSES:", courses.length);
-
-    // 🔹 Step 2: LLM formatting
-    let formatted = null;
-
-    try {
-      formatted = await formatRecommendations(userData, courses);
-      console.log("✨ LLM OUTPUT:", formatted);
-    } catch (err) {
-      console.error("⚠️ LLM failed:", err.message);
-    }
+    const result = await getRecommendations(req.body || {});
 
     res.json({
       success: true,
-      courses,
-      formatted,
+      fallback_used: result.fallback_used,
+      message: result.message,
+      topPicks: result.topPicks || [],
+      otherOptions: result.otherOptions || [],
+      pathwayOptions: result.pathwayOptions || [],
+      courses: result.courses,
+      count: result.courses.length,
+      formatted: result.formatted,
     });
-
   } catch (err) {
-    console.error("❌ Recommendation error:", err);
+    console.error("Recommendation error:", err);
 
     res.status(500).json({
       success: false,
+      fallback_used: false,
+      message: "Failed to get recommendations",
+      topPicks: [],
+      otherOptions: [],
+      pathwayOptions: [],
+      courses: [],
+      count: 0,
+      formatted: null,
       error: "Failed to get recommendations",
     });
   }
 });
 
-export default router; // ✅ NOW WORKS
+export default router;

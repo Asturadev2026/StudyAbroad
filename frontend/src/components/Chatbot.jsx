@@ -4,11 +4,10 @@ import flow from "../flow/flow";
 const cleanText = (text) => {
   if (!text) return "";
 
-  return text
+  return String(text)
     .replace(/\*\*/g, "")
-    .replace(/(\d+\.)/g, "\n$1")   // new line before numbers
     .replace(/- /g, "• ")
-    .replace(/\n\s*\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
     .trim();
 };
 const streamText = (text, callback) => {
@@ -39,6 +38,7 @@ export default function Chatbot() {
   const [page, setPage] = useState(0);
 
   const [selectedItems, setSelectedItems] = useState([]);
+  const [optionSearch, setOptionSearch] = useState("");
 
   const PAGE_SIZE = 5;
 
@@ -84,6 +84,7 @@ export default function Chatbot() {
     setVisibleOptions([]);
     setPage(0);
     setSelectedItems([]);
+    setOptionSearch("");
 
     if (node.message) {
       const msg =
@@ -239,6 +240,26 @@ if (node.options) {
     setPage(nextPage);
   };
 
+  const updateOptionSearch = (value) => {
+    setOptionSearch(value);
+    setPage(0);
+
+    const query = value.trim().toLowerCase();
+    const filtered = query
+      ? allOptions.filter((option) => option.label.toLowerCase().includes(query))
+      : allOptions;
+
+    setVisibleOptions(filtered.slice(0, query ? 12 : PAGE_SIZE));
+  };
+
+  const currentOptionList = optionSearch.trim()
+    ? allOptions.filter((option) =>
+        option.label.toLowerCase().includes(optionSearch.trim().toLowerCase())
+      )
+    : allOptions;
+
+  const isSearchableOptions = Boolean(flow[step]?.searchable || flow[step]?.multi);
+
   const handleOptionClick = (option) => {
     const node = flow[step];
 
@@ -284,11 +305,12 @@ if (node.options) {
     if (node.save) {
       setContext((prev) => ({
         ...prev,
-        [node.save]: option.value || option.label,
+        [node.save]: option.value ?? option.label,
       }));
     }
 
     setOptions([]);
+    setOptionSearch("");
     setStep(option.next);
   };
 
@@ -326,6 +348,7 @@ const handleAIFallback = async (inputText) => {
   setVisibleOptions([]);
   setPage(0);
   setSelectedItems([]);
+  setOptionSearch("");
 
   // 🔥 START typing indicator
   setIsTyping(true);
@@ -426,6 +449,7 @@ if (!match || isUserQuery(inputText)) {
   setOptions([]);
   setAllOptions([]);
   setVisibleOptions([]);
+  setOptionSearch("");
 
   
 
@@ -446,12 +470,13 @@ if (!match || isUserQuery(inputText)) {
         if (node.save) {
           setContext((prev) => ({
             ...prev,
-            [node.save]: match.value || match.label,
+            [node.save]: match.value ?? match.label,
           }));
         }
 
         setInput("");
         setOptions([]);
+        setOptionSearch("");
         setStep(match.next);
         return;
       } 
@@ -507,10 +532,12 @@ if (!match || isUserQuery(inputText)) {
   setMessages([]);
   setContext({});
   setOptions([]);
+  setOptionSearch("");
   setAllOptions([]);
   setVisibleOptions([]);
   setSelectedItems([]);
   setPage(0);
+  setOptionSearch("");
 
   // 🔥 IMPORTANT: force re-init like first load
   setStep(null);
@@ -536,15 +563,21 @@ if (!match || isUserQuery(inputText)) {
             >
               {m.bot && (
                 <div style={styles.botCard}>
-                  <div style={{ whiteSpace: "pre-wrap", lineHeight: "1.5" }}>
-  {cleanText(m.bot)}
-  
-</div>
-<div style={styles.time}>{m.time}</div>
+                  <div style={styles.botText}>{cleanText(m.bot)}</div>
+                  <div style={styles.time}>{m.time}</div>
 
                   {i === lastBotIndex &&
-                    visibleOptions.length > 0 && (
+                    allOptions.length > 0 && (
                       <div style={styles.options}>
+                        {isSearchableOptions && allOptions.length > PAGE_SIZE && (
+                          <input
+                            style={styles.optionSearch}
+                            value={optionSearch}
+                            placeholder="Search country..."
+                            onChange={(e) => updateOptionSearch(e.target.value)}
+                          />
+                        )}
+
                         {visibleOptions.map((o, idx) => (
                           <button
                             key={idx}
@@ -562,13 +595,17 @@ if (!match || isUserQuery(inputText)) {
                           </button>
                         ))}
 
-                        {visibleOptions.length < allOptions.length && (
+                        {!optionSearch.trim() && visibleOptions.length < allOptions.length && (
                           <button
                             style={styles.moreBtn}
                             onClick={loadMore}
                           >
                             Show More
                           </button>
+                        )}
+
+                        {optionSearch.trim() && currentOptionList.length === 0 && (
+                          <div style={styles.emptyOptions}>No matches found</div>
                         )}
 
                         {flow[step]?.multi &&
@@ -587,6 +624,7 @@ if (!match || isUserQuery(inputText)) {
 
                                 setSelectedItems([]);
                                 setOptions([]);
+                                setOptionSearch("");
                                 setStep(node.next);
                               }}
                             >
@@ -686,13 +724,22 @@ const styles = {
   },
 
   botCard: {
-  background: "#fff",
-  padding: 14,
-  borderRadius: "12px",
-  marginBottom: 10,
-  maxWidth: "85%", // ✅ wider text like ChatGPT
-  lineHeight: 1.5,
-},
+    background: "#fff",
+    padding: 14,
+    borderRadius: "12px",
+    marginBottom: 10,
+    maxWidth: "92%",
+    lineHeight: 1.5,
+  },
+
+  botText: {
+    margin: 0,
+    whiteSpace: "pre-wrap",
+    wordBreak: "break-word",
+    overflowWrap: "anywhere",
+    lineHeight: 1.5,
+    fontSize: 14,
+  },
 
   userBubble: {
     background: "#FFD700",
@@ -707,6 +754,22 @@ const styles = {
     display: "flex",
     flexWrap: "wrap",
     gap: 8,
+  },
+
+  optionSearch: {
+    width: "100%",
+    padding: "9px 10px",
+    borderRadius: 10,
+    border: "1px solid #ccc",
+    outline: "none",
+    marginBottom: 4,
+  },
+
+  emptyOptions: {
+    width: "100%",
+    fontSize: 13,
+    color: "#666",
+    padding: "4px 0",
   },
 
   optionBtn: {

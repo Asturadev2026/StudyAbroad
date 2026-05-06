@@ -158,7 +158,10 @@ student_budget: {
 student_ielts: {
   message: "Do you have IELTS/PTE score?",
   save: "ieltsScore",
-  next: "student_intake",
+  options: [
+    { label: "Yes", value: true, next: "student_intake" },
+    { label: "No", value: false, next: "student_intake" },
+  ],
 },
 
 student_intake: {
@@ -209,6 +212,8 @@ fetch_recommendations: {
       return {
         courses: data.courses || [],
         formatted: data.formatted || null,
+        fallback_used: Boolean(data.fallback_used),
+        message: data.message || "",
       };
 
     } catch (err) {
@@ -217,6 +222,8 @@ fetch_recommendations: {
       return {
         courses: [],
         formatted: null,
+        fallback_used: false,
+        message: "",
       };
     }
   },
@@ -228,7 +235,7 @@ fetch_recommendations: {
 // 🎯 DISPLAY RESULTS (UPDATED WITH STREAM SUPPORT)
 show_recommendations: {
   type: "custom",
-  stream: true, // 🔥 ONLY ADDITION
+  stream: true,
 
   render: (_, context) => {
     console.log("🎯 FULL CONTEXT:", context);
@@ -236,35 +243,33 @@ show_recommendations: {
     const apiResult = context?.__apiResult || {};
     const formatted = apiResult.formatted;
     const courses = apiResult.courses || [];
+    const responseMessage = apiResult.message;
 
     console.log("✨ FORMATTED:", formatted);
     console.log("📊 COURSES:", courses);
 
-    // ✅ PRIMARY: LLM TEXT OUTPUT (CHATGPT STYLE)
     if (typeof formatted === "string" && formatted.trim()) {
-      return `🎓 Recommended Courses for You:
-
-${formatted}`;
+      return formatted;
     }
 
-    // ⚠️ FALLBACK: RAW VECTOR RESULTS
     if (courses.length > 0) {
-      return `🎓 Top Course Recommendations:
+      return `🎓 Recommended Courses for You:
+
+${responseMessage ? `${responseMessage}\n` : ""}
 
 ${courses.map((c, i) => `
-${i + 1}. ${c.title}
-⭐ ${(c.similarity * 100).toFixed(1)}%
+${i + 1}. ${c.course_name || c.title}
+📍 ${c.country || "Country details available on request"}
+⭐ ${c.match_score || Math.round((c.similarity || 0) * 100)}% Match
+💡 ${c.reason || "Recommended from available university program data."}
 `).join("\n")}`;
     }
 
-    // ❌ NOTHING FOUND
     return "❌ No courses found. Try different inputs.";
   },
 
   next: "restart_flow",
 },
-
-
 restart_flow: {
   message: "Do you want to search again?",
   options: [
