@@ -251,6 +251,15 @@ show_recommendations: {
     const courses = apiResult.courses || [];
     const responseMessage = apiResult.message;
 
+    if (courses.length > 0) {
+      return {
+        type: "recommendations",
+        title: "Recommended Courses for You",
+        message: responseMessage || "Showing programs that match your profile.",
+        courses,
+      };
+    }
+
     console.log("✨ FORMATTED:", formatted);
     console.log("📊 COURSES:", courses);
 

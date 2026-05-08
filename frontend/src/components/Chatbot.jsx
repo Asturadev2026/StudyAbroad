@@ -25,6 +25,196 @@ const streamText = (text, callback) => {
     }
   }, 25); // 🔥 human-visible speed
 };
+
+const renderBotText = (text) => {
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+
+  return String(text).split(urlRegex).map((part, index) => {
+    if (!part.match(urlRegex)) return part;
+
+    return (
+      <a
+        key={`${part}-${index}`}
+        href={part}
+        target="_blank"
+        rel="noreferrer"
+        style={styles.botLink}
+      >
+        {part}
+      </a>
+    );
+  });
+};
+
+const isRecommendationPayload = (value) =>
+  value && value.type === "recommendations" && Array.isArray(value.courses);
+
+const getCourseVisual = (courseName = "") => {
+  const name = courseName.toLowerCase();
+
+  if (name.includes("artificial intelligence") || name.includes(" ai ") || name.includes("machine learning") || name.includes("data science")) {
+    return { icon: "🤖", color: "#7c3aed", bg: "#f6f0ff" };
+  }
+
+  if (name.includes("software") || name.includes("computer science") || name.includes("computer engineering") || name.includes("cyber") || name.includes("information technology") || name.includes("programming")) {
+    return { icon: "💻", color: "#2563eb", bg: "#eef5ff" };
+  }
+
+  if (name.includes("civil") || name.includes("construction") || name.includes("architecture") || name.includes("built environment")) {
+    return { icon: "🏗️", color: "#ea580c", bg: "#fff3e8" };
+  }
+
+  if (name.includes("mechanical") || name.includes("mechatronic") || name.includes("electrical") || name.includes("electronic") || name.includes("engineering") || name.includes("technology")) {
+    return { icon: "⚙️", color: "#f5a400", bg: "#fff8e6" };
+  }
+
+  if (name.includes("business") || name.includes("management") || name.includes("mba") || name.includes("marketing") || name.includes("finance") || name.includes("accounting") || name.includes("commerce") || name.includes("entrepreneurship")) {
+    return { icon: "📊", color: "#0f766e", bg: "#ecfdf5" };
+  }
+
+  if (name.includes("agriculture") || name.includes("horticulture") || name.includes("food") || name.includes("nutrition") || name.includes("environment") || name.includes("sustainability") || name.includes("renewable")) {
+    return { icon: "🌱", color: "#16a34a", bg: "#f0fdf4" };
+  }
+
+  if (name.includes("health") || name.includes("medicine") || name.includes("medical") || name.includes("nursing") || name.includes("pharmacy") || name.includes("biomedical") || name.includes("dental") || name.includes("veterinary")) {
+    return { icon: "⚕️", color: "#dc2626", bg: "#fff1f2" };
+  }
+
+  if (name.includes("law") || name.includes("legal") || name.includes("justice") || name.includes("criminology")) {
+    return { icon: "⚖️", color: "#7c2d12", bg: "#fff7ed" };
+  }
+
+  if (name.includes("arts") || name.includes("fine art") || name.includes("design") || name.includes("music") || name.includes("film") || name.includes("media") || name.includes("fashion") || name.includes("creative")) {
+    return { icon: "🎨", color: "#db2777", bg: "#fdf2f8" };
+  }
+
+  if (name.includes("education") || name.includes("teaching") || name.includes("pedagogy")) {
+    return { icon: "📚", color: "#4f46e5", bg: "#eef2ff" };
+  }
+
+  if (name.includes("psychology") || name.includes("counseling") || name.includes("behaviour") || name.includes("behavior") || name.includes("social work")) {
+    return { icon: "🧠", color: "#9333ea", bg: "#faf5ff" };
+  }
+
+  if (name.includes("science") || name.includes("biology") || name.includes("chemistry") || name.includes("physics") || name.includes("biochemistry") || name.includes("biotechnology")) {
+    return { icon: "🔬", color: "#0891b2", bg: "#ecfeff" };
+  }
+
+  if (name.includes("hospitality") || name.includes("tourism") || name.includes("cookery") || name.includes("culinary") || name.includes("hotel")) {
+    return { icon: "🍽️", color: "#d97706", bg: "#fffbeb" };
+  }
+
+  if (name.includes("sports") || name.includes("sport") || name.includes("exercise") || name.includes("fitness")) {
+    return { icon: "🏅", color: "#ca8a04", bg: "#fefce8" };
+  }
+
+  if (name.includes("language") || name.includes("linguistics") || name.includes("english") || name.includes("spanish") || name.includes("french")) {
+    return { icon: "🌐", color: "#0284c7", bg: "#f0f9ff" };
+  }
+
+  if (name.includes("public policy") || name.includes("political") || name.includes("international relations") || name.includes("public health")) {
+    return { icon: "🏛️", color: "#475569", bg: "#f8fafc" };
+  }
+
+  return { icon: "🎓", color: "#0f766e", bg: "#eefcf7" };
+};
+
+const getDegreeLabel = (course = {}) => {
+  const level = Number(course.study_level || course.study_levels);
+  const title = String(course.course_name || course.title || "").toLowerCase();
+
+  if (level === 22 || title.includes("bachelor") || title.includes("beng") || title.includes("bsc") || title.includes("ba ")) {
+    return "Bachelor's Degree";
+  }
+
+  if (level === 24 || title.includes("master") || title.includes("msc") || title.includes("meng") || title.includes("mba")) {
+    return "Master's Degree";
+  }
+
+  if (level === 25 || title.includes("phd") || title.includes("doctor")) {
+    return "PhD";
+  }
+
+  if (level === 2 || title.includes("diploma")) {
+    return "Diploma";
+  }
+
+  if (level === 26 || title.includes("certificate")) {
+    return "Certificate";
+  }
+
+  return "Program";
+};
+
+const renderRecommendationCards = (payload) => (
+  <div style={styles.recommendationWrap}>
+    <div style={styles.recommendationHeader}>
+      <div style={styles.recommendationTitle}>{payload.title}</div>
+      <div style={styles.recommendationSubtitle}>{payload.message}</div>
+    </div>
+
+    <div style={styles.courseList}>
+      {payload.courses.map((course, index) => {
+        const courseName = course.course_name || course.title || "Recommended course";
+        const university = course.university || "University details available on request";
+        const country = course.country || "Country details available on request";
+        const link = course.course_link;
+        const iconLink = course.icon_link || course.icon_url;
+        const visual = getCourseVisual(courseName);
+        const degreeLabel = getDegreeLabel(course);
+
+        const content = (
+          <>
+            <div style={{ ...styles.courseVisual, background: visual.bg }}>
+              {iconLink ? (
+                <img
+                  src={iconLink}
+                  alt=""
+                  style={styles.courseIconImage}
+                  loading="lazy"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <span style={{ ...styles.courseVisualIcon, color: visual.color }}>
+                  {visual.icon}
+                </span>
+              )}
+            </div>
+            <div style={styles.courseContent}>
+              <div style={styles.courseName}>{courseName}</div>
+              <div style={styles.courseLocation}>{university}, {country}</div>
+              <div style={styles.degreeBadge}>{degreeLabel}</div>
+              <div style={styles.courseReason}>
+                {course.reason || "Recommended from available university program data."}
+              </div>
+            </div>
+            <div style={styles.cardTools}>
+              <div style={styles.bookmarkIcon}>□</div>
+              <div style={styles.courseAction}>{">"}</div>
+            </div>
+          </>
+        );
+
+        return link ? (
+          <a
+            key={`${courseName}-${index}`}
+            href={link}
+            target="_blank"
+            rel="noreferrer"
+            style={styles.courseCard}
+          >
+            {content}
+          </a>
+        ) : (
+          <div key={`${courseName}-${index}`} style={styles.courseCard}>
+            {content}
+          </div>
+        );
+      })}
+    </div>
+  </div>
+);
+
 export default function Chatbot() {
   const [isTyping, setIsTyping] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
@@ -104,6 +294,26 @@ export default function Chatbot() {
 if (node.type === "custom") {
   try {
     const output = node.render(null, context);
+
+    if (isRecommendationPayload(output)) {
+      setIsTyping(true);
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      setIsTyping(false);
+
+      setMessages((prev) => [...prev, {
+        recommendations: output,
+        time: new Date().toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+      }]);
+
+      if (node.next) {
+        setTimeout(() => setStep(node.next), 400);
+      }
+
+      return;
+    }
 
     console.log("🎯 CUSTOM RENDER OUTPUT:", output);
 
@@ -561,9 +771,16 @@ if (!match || isUserQuery(inputText)) {
                 justifyContent: m.user ? "flex-end" : "flex-start",
               }}
             >
+              {m.recommendations && (
+                <div style={styles.recommendationMessage}>
+                  {renderRecommendationCards(m.recommendations)}
+                  <div style={styles.time}>{m.time}</div>
+                </div>
+              )}
+
               {m.bot && (
                 <div style={styles.botCard}>
-                  <div style={styles.botText}>{cleanText(m.bot)}</div>
+                  <div style={styles.botText}>{renderBotText(cleanText(m.bot))}</div>
                   <div style={styles.time}>{m.time}</div>
 
                   {i === lastBotIndex &&
@@ -699,9 +916,11 @@ const styles = {
     position: "fixed",
     bottom: 90,
     right: 20,
-    width: 460,
-    height: 600,
-    background: "#f4f4f4",
+    boxShadow: "0 22px 70px rgba(15, 23, 42, 0.18)",
+    fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+    width: 470,
+    height: 620,
+    background: "#f6f8fb",
     borderRadius: 25, // ✅ more rounded
     display: "flex",
     flexDirection: "column",
@@ -719,8 +938,9 @@ const styles = {
 
   chatBody: {
     flex: 1,
-    padding: 10,
+    padding: 14,
     overflowY: "auto",
+    background: "linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%)",
   },
 
   botCard: {
@@ -739,6 +959,165 @@ const styles = {
     overflowWrap: "anywhere",
     lineHeight: 1.5,
     fontSize: 14,
+  },
+
+  botLink: {
+    color: "#0645AD",
+    textDecoration: "underline",
+    wordBreak: "break-all",
+  },
+
+  recommendationMessage: {
+    width: "100%",
+    maxWidth: "100%",
+    marginBottom: 10,
+  },
+
+  recommendationWrap: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 8,
+  },
+
+  recommendationHeader: {
+    background: "#fff",
+    border: "1px solid #e7ebf2",
+    borderRadius: 16,
+    padding: "13px 15px",
+    boxShadow: "0 10px 30px rgba(15, 23, 42, 0.07)",
+  },
+
+  recommendationTitle: {
+    color: "#0B1F3A",
+    fontSize: 14,
+    fontWeight: 800,
+    marginBottom: 4,
+  },
+
+  recommendationSubtitle: {
+    color: "#667085",
+    fontSize: 12,
+    lineHeight: 1.4,
+  },
+
+  courseList: {
+    display: "flex",
+    flexDirection: "column",
+    gap: 8,
+  },
+
+  courseCard: {
+    display: "grid",
+    gridTemplateColumns: "88px 1fr 34px",
+    alignItems: "stretch",
+    gap: 14,
+    background: "#fff",
+    border: "1px solid #e5eaf2",
+    borderRadius: 12,
+    padding: 8,
+    color: "inherit",
+    textDecoration: "none",
+    boxShadow: "0 8px 22px rgba(15, 23, 42, 0.06)",
+    minHeight: 104,
+  },
+
+  courseVisual: {
+    width: 88,
+    minHeight: 88,
+    borderRadius: 8,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    border: "1px solid rgba(226, 232, 240, 0.7)",
+  },
+
+  courseVisualIcon: {
+    letterSpacing: 0,
+    fontSize: 31,
+    fontWeight: 700,
+    lineHeight: 1,
+  },
+
+  courseIconImage: {
+    width: 42,
+    height: 42,
+    objectFit: "contain",
+    display: "block",
+  },
+
+  cardTools: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+
+  bookmarkIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: "50%",
+    border: "1px solid #e6eaf0",
+    color: "#64748b",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: 14,
+    background: "#fff",
+  },
+
+  courseContent: {
+    minWidth: 0,
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "center",
+  },
+
+  courseName: {
+    color: "#111827",
+    fontSize: 12.5,
+    fontWeight: 800,
+    lineHeight: 1.3,
+    marginBottom: 4,
+  },
+
+  courseLocation: {
+    color: "#344054",
+    fontSize: 10.5,
+    fontWeight: 600,
+    lineHeight: 1.35,
+    marginBottom: 5,
+  },
+
+  degreeBadge: {
+    alignSelf: "flex-start",
+    background: "#eef4ff",
+    color: "#2563eb",
+    borderRadius: 4,
+    padding: "2px 6px",
+    fontSize: 9,
+    fontWeight: 800,
+    marginBottom: 5,
+  },
+
+  courseReason: {
+    color: "#475467",
+    fontSize: 10.5,
+    lineHeight: 1.35,
+  },
+
+  courseAction: {
+    width: 30,
+    height: 30,
+    borderRadius: "50%",
+    border: "1px solid #e8edf4",
+    color: "#f5b400",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    fontSize: 17,
+    lineHeight: 1,
+    background: "#fffdfa",
+    boxShadow: "0 4px 12px rgba(15, 23, 42, 0.06)",
   },
 
   userBubble: {

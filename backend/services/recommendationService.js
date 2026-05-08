@@ -1,5 +1,6 @@
 import { db } from "../db/index.js";
 import { neon } from "../db/neon.js";
+import { attachCourseLinks } from "./courseLinkService.js";
 import { generateEmbedding } from "./embeddingService.js";
 
 const RESULT_LIMIT = 7;
@@ -922,11 +923,14 @@ async function enrichNames(rows) {
 function mapCourse(row) {
   return {
     course_name: row.title,
-    university: row.university_name,
+    university: row.university_name || row.university,
     country: row.country_name,
     match_score: row.match_score,
     reason: row.reason || buildReason(row),
     category: row.category,
+    course_link: row.course_link,
+    icon_link: row.icon_link,
+    study_level: row.study_levels,
     type: row.type || "direct",
   };
 }
@@ -988,8 +992,9 @@ async function buildFinalCourses(rows, userInput, studyLevels, fieldKeywords, us
   const enriched = await enrichNames(diverse);
   const finalRows = enriched.filter((course) => isSafeRecommendation(course, userInput, useFallback));
   const presentationRows = preparePresentationRows(finalRows, userInput);
+  const linkedRows = await attachCourseLinks(presentationRows);
 
-  return presentationRows.map(mapCourse);
+  return linkedRows.map(mapCourse);
 }
 
 function buildPersonalizedTip(userInput, fallbackUsed) {
@@ -1018,8 +1023,9 @@ function buildPersonalizedTip(userInput, fallbackUsed) {
 
 function formatCourseItem(course, index) {
   return `${index + 1}. ${course.course_name}
+University: ${course.university || "University details available on request"}
 Country: ${course.country || "Country details available on request"}
-Reason: ${course.reason}`;
+${course.course_link ? `Link: ${course.course_link}\n` : ""}Reason: ${course.reason}`;
 }
 
 function formatRecommendationText({ message, topPicks, otherOptions, pathwayOptions, userInput, fallbackUsed }) {
