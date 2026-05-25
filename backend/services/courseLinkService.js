@@ -4,305 +4,397 @@ import { fileURLToPath } from "url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const COURSES_FILE_PATH = path.resolve(__dirname, "../../courses.txt");
-const GENERIC_PROGRAM_URL = "https://global.stunel.com/program/";
-const STUDY_LEVEL_URL_LABELS = {
-  2: "diploma",
-  22: "bachelors",
-  24: "masters",
-  25: "phd",
-  26: "certificate",
-};
 
-let courseLinkCache = null;
+const COURSES_FILE_PATH = path.resolve(
+  __dirname,
+  "../../courses.json"
+);
 
-function setUniqueLink(map, duplicateKeys, key, url) {
-  if (!key || duplicateKeys.has(key)) return;
+const GENERIC_PROGRAM_URL =
+  "https://global.stunel.com/program/";
 
-  if (map.has(key) && map.get(key) !== url) {
-    map.delete(key);
-    duplicateKeys.add(key);
-    return;
-  }
+let courseCache = null;
 
-  map.set(key, url);
-}
+// ---------------------------------------------------
+// NORMALIZE TEXT
+// ---------------------------------------------------
+function normalize(text = "") {
 
-function addCandidate(map, key, candidate) {
-  if (!key) return;
-
-  const existing = map.get(key) || [];
-  existing.push(candidate);
-  map.set(key, existing);
-}
-
-function normalizeCourseTitle(title = "") {
-  return String(title)
-    .toLowerCase()
-    .replace(/\([^)]*\)/g, "")
-    .replace(/\b(honours|honors|degree|program|programme)\b/g, "")
-    .replace(/[^a-z0-9]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function normalizeCourseKeyTitle(title = "") {
-  return String(title)
+  return String(text)
     .toLowerCase()
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\([^)]*\)/g, "")
+    .replace(/honours|honors/g, "")
     .replace(/&/g, " and ")
     .replace(/[^a-z0-9]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
 
-function normalizeUniversityName(university = "") {
-  return String(university)
-    .toLowerCase()
-    .replace(/&/g, " and ")
-    .replace(/[^a-z0-9]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
+// ---------------------------------------------------
+// SLUGIFY
+// ---------------------------------------------------
+function slugify(text = "") {
 
-function buildCourseUniversityKey(title = "", university = "") {
-  const normalizedTitle = normalizeCourseKeyTitle(title);
-  const normalizedUniversity = normalizeUniversityName(university);
-
-  if (!normalizedTitle || !normalizedUniversity) return "";
-
-  return `${normalizedTitle}|${normalizedUniversity}`;
-}
-
-function normalizeLevel(value = "") {
-  return String(value).toLowerCase().trim();
-}
-
-function getLevelFromUrl(url = "") {
-  try {
-    return normalizeLevel(new URL(url).searchParams.get("level"));
-  } catch {
-    return "";
-  }
-}
-
-function getStudyLevelLabel(studyLevel) {
-  return STUDY_LEVEL_URL_LABELS[Number(studyLevel)] || normalizeLevel(studyLevel);
-}
-
-function buildCourseUniversityLevelKey(title = "", university = "", level = "") {
-  const courseUniversityKey = buildCourseUniversityKey(title, university);
-  const normalizedLevel = normalizeLevel(level);
-
-  if (!courseUniversityKey || !normalizedLevel) return "";
-
-  return `${courseUniversityKey}|${normalizedLevel}`;
-}
-
-function slugifyCourseTitle(title = "") {
-  return String(title)
+  return String(text)
     .toLowerCase()
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/&/g, " and ")
     .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .replace(/-{2,}/g, "-");
+    .replace(/-{2,}/g, "-")
+    .replace(/^-|-$/g, "");
 }
 
-function buildCourseSpecificLink(title = "", baseUrl = GENERIC_PROGRAM_URL) {
-  const slug = slugifyCourseTitle(title);
-  if (!slug) return baseUrl;
+// ---------------------------------------------------
+// GENERIC LINK
+// ---------------------------------------------------
+function buildGenericLink(title = "") {
 
-  const normalizedBase = baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
-  return `${normalizedBase}${slug}`;
+  return (
+    GENERIC_PROGRAM_URL +
+    slugify(title)
+  );
 }
 
-function parseCourseLinkLine(line = "") {
-  const [title, university, url, iconUrl] = line.split("|").map((part) => part?.trim());
+// ---------------------------------------------------
+// LOAD COURSES.JSON
+// ---------------------------------------------------
+async function loadCourses() {
 
-  if (!title || !url || !/^https?:\/\//i.test(url)) {
-    return null;
+  if (courseCache) {
+    return courseCache;
   }
-
-  return {
-    title,
-    university,
-    url,
-    iconUrl: /^https?:\/\//i.test(iconUrl || "") ? iconUrl : "",
-  };
-}
-
-async function loadCourseLinks() {
-  if (courseLinkCache) {
-    return courseLinkCache;
-  }
-
-  const byExactTitle = new Map();
-  const byNormalizedTitle = new Map();
-  const byCourseAndUniversity = new Map();
-  const byCourseUniversityAndLevel = new Map();
-  const byUrl = new Map();
-  const byIconUrl = new Map();
-  const byUniversityIcon = new Map();
-  const exactTitleCandidates = new Map();
-  const normalizedTitleCandidates = new Map();
-  const duplicateExactTitles = new Set();
-  const duplicateNormalizedTitles = new Set();
-  const duplicateCourseUniversities = new Set();
-  const duplicateCourseUniversityLevels = new Set();
 
   try {
-    const file = await fs.readFile(COURSES_FILE_PATH, "utf8");
 
-    for (const line of file.split(/\r?\n/)) {
-      const parsed = parseCourseLinkLine(line);
-      if (!parsed) continue;
-      const candidate = {
-        ...parsed,
-        level: getLevelFromUrl(parsed.url),
-      };
-      const exactTitleKey = parsed.title.toLowerCase();
-      const normalizedTitleKey = normalizeCourseTitle(parsed.title);
-
-      setUniqueLink(
-        byExactTitle,
-        duplicateExactTitles,
-        exactTitleKey,
-        parsed.url
-      );
-      setUniqueLink(
-        byNormalizedTitle,
-        duplicateNormalizedTitles,
-        normalizedTitleKey,
-        parsed.url
-      );
-      setUniqueLink(
-        byCourseAndUniversity,
-        duplicateCourseUniversities,
-        buildCourseUniversityKey(parsed.title, parsed.university),
-        parsed.url
-      );
-      setUniqueLink(
-        byCourseUniversityAndLevel,
-        duplicateCourseUniversityLevels,
-        buildCourseUniversityLevelKey(parsed.title, parsed.university, getLevelFromUrl(parsed.url)),
-        parsed.url
+    const file =
+      await fs.readFile(
+        COURSES_FILE_PATH,
+        "utf8"
       );
 
-      if (parsed.university) {
-        byUrl.set(parsed.url, parsed.university);
-      }
+    const courses =
+      JSON.parse(file);
 
-      if (parsed.iconUrl) {
-        byIconUrl.set(parsed.url, parsed.iconUrl);
-        byUniversityIcon.set(normalizeUniversityName(parsed.university), parsed.iconUrl);
-      }
+    courseCache = courses;
 
-      addCandidate(exactTitleCandidates, exactTitleKey, candidate);
-      addCandidate(normalizedTitleCandidates, normalizedTitleKey, candidate);
-    }
+    console.log(
+      `✅ Loaded ${courses.length} courses`
+    );
+
+    return courses;
+
   } catch (err) {
-    console.warn("Course link file not available:", err.message);
-  }
 
-  courseLinkCache = {
-    byExactTitle,
-    byNormalizedTitle,
-    byCourseAndUniversity,
-    byCourseUniversityAndLevel,
-    byUrl,
-    byIconUrl,
-    byUniversityIcon,
-    exactTitleCandidates,
-    normalizedTitleCandidates,
-  };
-  return courseLinkCache;
+    console.error(
+      "❌ Failed loading courses.json:",
+      err.message
+    );
+
+    return [];
+  }
 }
 
-function chooseCandidate(candidates = [], studyLevel = "") {
-  if (candidates.length === 0) return null;
-  if (candidates.length === 1) return candidates[0];
+// ---------------------------------------------------
+// FIND BEST MATCH
+// ---------------------------------------------------
+function findBestCourseMatch(
+  courses,
+  title = ""
+) {
 
-  const level = getStudyLevelLabel(studyLevel);
-  const levelMatches = level
-    ? candidates.filter((candidate) => candidate.level === level)
-    : [];
+  const normalizedInput =
+    normalize(title);
 
-  if (levelMatches.length === 1) return levelMatches[0];
-  if (levelMatches.length > 1) return levelMatches[0];
+  const inputWords =
+    normalizedInput
+      .split(" ")
+      .filter(word => word.length > 2);
+
+  let bestMatch = null;
+  let bestScore = 0;
+
+  for (const course of courses) {
+
+    const dbTitle =
+      normalize(
+        course.program_name
+      );
+
+    const dbWords =
+      dbTitle
+        .split(" ")
+        .filter(word => word.length > 2);
+
+    let score = 0;
+
+    // -----------------------------------
+    // WORD OVERLAP SCORE
+    // -----------------------------------
+    for (const word of inputWords) {
+
+      if (
+        dbWords.includes(word)
+      ) {
+        score++;
+      }
+    }
+
+    // -----------------------------------
+    // BONUS SCORE
+    // -----------------------------------
+    if (
+      dbTitle.includes(normalizedInput)
+      || normalizedInput.includes(dbTitle)
+    ) {
+      score += 5;
+    }
+
+    // -----------------------------------
+    // BEST MATCH
+    // -----------------------------------
+    if (score > bestScore) {
+
+      bestScore = score;
+      bestMatch = course;
+    }
+  }
+
+  // -----------------------------------
+  // MATCH FOUND
+  // -----------------------------------
+  if (bestScore >= 3) {
+
+    console.log("\n✅ MATCH FOUND");
+    console.log("INPUT:", title);
+    console.log("MATCH:", bestMatch.program_name);
+    console.log("SCORE:", bestScore);
+
+    return bestMatch;
+  }
+
+  // -----------------------------------
+  // NO MATCH
+  // -----------------------------------
+  console.log("\n❌ NO MATCH");
+  console.log("INPUT:", title);
 
   return null;
 }
 
-export async function getCourseLinkDetails(title = "", university = "", studyLevel = "") {
-  const links = await loadCourseLinks();
-  const exactKey = String(title).toLowerCase().trim();
-  const normalizedKey = normalizeCourseTitle(title);
-  const courseUniversityLevelKey = buildCourseUniversityLevelKey(
-    title,
-    university,
-    getStudyLevelLabel(studyLevel)
-  );
-  const courseUniversityKey = buildCourseUniversityKey(title, university);
-  const storedUrl = links.byCourseUniversityAndLevel.get(courseUniversityLevelKey)
-    || links.byCourseAndUniversity.get(courseUniversityKey)
-    || links.byExactTitle.get(exactKey)
-    || links.byNormalizedTitle.get(normalizedKey)
-    || GENERIC_PROGRAM_URL;
-  const fallbackCandidate = storedUrl === GENERIC_PROGRAM_URL
-    ? chooseCandidate(links.exactTitleCandidates.get(exactKey), studyLevel)
-      || chooseCandidate(links.normalizedTitleCandidates.get(normalizedKey), studyLevel)
-    : null;
+// ---------------------------------------------------
+// GET COURSE DETAILS
+// ---------------------------------------------------
+export async function getCourseLinkDetails(
+  title = ""
+) {
 
-  if (fallbackCandidate) {
-    return {
-      url: fallbackCandidate.url,
-      university: university || fallbackCandidate.university || "",
-      iconUrl: fallbackCandidate.iconUrl
-        || links.byUniversityIcon.get(normalizeUniversityName(fallbackCandidate.university))
-        || "",
-    };
-  }
+  const courses =
+    await loadCourses();
 
-  if (storedUrl.replace(/\/+$/, "") === GENERIC_PROGRAM_URL.replace(/\/+$/, "")) {
+  const matchedCourse =
+    findBestCourseMatch(
+      courses,
+      title
+    );
+
+  // -----------------------------------------
+  // NO MATCH
+  // -----------------------------------------
+  if (!matchedCourse) {
+
     return {
-      url: buildCourseSpecificLink(title, storedUrl),
-      university,
+
+      program_name:
+        title,
+
+      url:
+        buildGenericLink(title),
+
+      university:
+        "University details available on request",
+
       iconUrl: "",
+
+      location:
+        "Australia",
+
+      study_level:
+        "Program",
+
+      study_stream:
+        "General",
+
+      intakes:
+        "N/A",
+
+      duration:
+        "N/A",
+
+      fees:
+        "N/A"
     };
   }
 
+  // -----------------------------------------
+  // MATCH FOUND
+  // -----------------------------------------
   return {
-    url: storedUrl,
-    university: university || links.byUrl.get(storedUrl) || "",
-    iconUrl: links.byIconUrl.get(storedUrl)
-      || links.byUniversityIcon.get(normalizeUniversityName(university || links.byUrl.get(storedUrl)))
+
+    program_name:
+      matchedCourse.program_name,
+
+    url:
+      matchedCourse.program_link
+      || buildGenericLink(title),
+
+    university:
+      matchedCourse.university_name
+      || "University details available on request",
+
+    iconUrl:
+      matchedCourse.university_logo
       || "",
+
+    location:
+      matchedCourse.location
+      || "Australia",
+
+    study_level:
+      matchedCourse.study_level
+      || "Program",
+
+    study_stream:
+      matchedCourse.study_stream
+      || "General",
+
+    intakes:
+      matchedCourse.intakes
+      || "N/A",
+
+    duration:
+      matchedCourse.duration
+      || "N/A",
+
+    fees:
+      matchedCourse.fees
+      || "N/A"
   };
 }
 
-export async function getCourseLink(title = "", university = "", studyLevel = "") {
-  const details = await getCourseLinkDetails(title, university, studyLevel);
+// ---------------------------------------------------
+// GET ONLY LINK
+// ---------------------------------------------------
+export async function getCourseLink(
+  title = ""
+) {
+
+  const details =
+    await getCourseLinkDetails(
+      title
+    );
+
   return details.url;
 }
 
-export async function attachCourseLinks(courses = []) {
+// ---------------------------------------------------
+// ATTACH DETAILS TO AI COURSES
+// ---------------------------------------------------
+export async function attachCourseLinks(
+  courses = []
+) {
+
   return Promise.all(
+
     courses.map(async (course) => {
-      const details = await getCourseLinkDetails(
-        course.course_name || course.title,
-        course.university || course.university_name,
-        course.study_level || course.study_levels
-      );
+
+      const courseTitle =
+        course.course_name
+        || course.title
+        || "";
+
+      const details =
+        await getCourseLinkDetails(
+          courseTitle
+        );
+
+      console.log("\n-----------------------------------");
+      console.log("VECTOR TITLE:", courseTitle);
+      console.log("MATCHED JSON:", details);
+      console.log("-----------------------------------\n");
 
       return {
-        ...course,
-        university: course.university || course.university_name || details.university,
-        university_name: course.university_name || course.university || details.university,
-        course_link: details.url,
-        icon_link: course.icon_link || course.icon_url || details.iconUrl,
+
+        // -----------------------------------
+        // COURSE NAME
+        // -----------------------------------
+        course_name:
+          details.program_name,
+
+        title:
+          details.program_name,
+
+        // -----------------------------------
+        // UNIVERSITY
+        // -----------------------------------
+        university:
+          details.university,
+
+        university_name:
+          details.university,
+
+        // -----------------------------------
+        // LOCATION
+        // -----------------------------------
+        location:
+          details.location,
+
+        country:
+          details.location,
+
+        // -----------------------------------
+        // COURSE DETAILS
+        // -----------------------------------
+        study_level:
+          details.study_level,
+
+        study_stream:
+          details.study_stream,
+
+        intakes:
+          details.intakes,
+
+        duration:
+          details.duration,
+
+        fees:
+          details.fees,
+
+        // -----------------------------------
+        // LINKS
+        // -----------------------------------
+        course_link:
+          details.url,
+
+        icon_link:
+          details.iconUrl,
+
+        // -----------------------------------
+        // VECTOR DATA
+        // -----------------------------------
+        match_score:
+          course.match_score,
+
+        reason:
+          course.reason,
+
+        category:
+          course.category,
+
+        type:
+          course.type || "direct",
       };
     })
   );

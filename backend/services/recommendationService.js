@@ -921,17 +921,77 @@ async function enrichNames(rows) {
 }
 
 function mapCourse(row) {
+
   return {
-    course_name: row.title,
-    university: row.university_name || row.university,
-    country: row.country_name,
-    match_score: row.match_score,
-    reason: row.reason || buildReason(row),
-    category: row.category,
-    course_link: row.course_link,
-    icon_link: row.icon_link,
-    study_level: row.study_levels,
-    type: row.type || "direct",
+
+    // -----------------------------------
+    // BASIC
+    // -----------------------------------
+    course_name:
+      row.title,
+
+    university:
+      row.university_name
+      || row.university,
+
+    university_name:
+      row.university_name
+      || row.university,
+
+    country:
+      row.country_name,
+
+    location:
+      row.location
+      || row.country_name,
+
+    // -----------------------------------
+    // COURSE DETAILS
+    // -----------------------------------
+    study_level:
+      row.study_level
+      || row.study_levels,
+
+    study_stream:
+      row.study_stream
+      || row.study_streams,
+
+    intakes:
+      row.intakes,
+
+    duration:
+      row.duration,
+
+    fees:
+      row.fees,
+
+    // -----------------------------------
+    // UI
+    // -----------------------------------
+    match_score:
+      row.match_score,
+
+    reason:
+      row.reason
+      || buildReason(row),
+
+    category:
+      row.category,
+
+    // -----------------------------------
+    // LINKS
+    // -----------------------------------
+    course_link:
+      row.course_link,
+
+    icon_link:
+      row.icon_link,
+
+    // -----------------------------------
+    // TYPE
+    // -----------------------------------
+    type:
+      row.type || "direct",
   };
 }
 

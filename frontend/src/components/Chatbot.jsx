@@ -148,25 +148,68 @@ const getDegreeLabel = (course = {}) => {
 
 const renderRecommendationCards = (payload) => (
   <div style={styles.recommendationWrap}>
+
     <div style={styles.recommendationHeader}>
-      <div style={styles.recommendationTitle}>{payload.title}</div>
-      <div style={styles.recommendationSubtitle}>{payload.message}</div>
+      <div style={styles.recommendationTitle}>
+        {payload.title}
+      </div>
+
+      <div style={styles.recommendationSubtitle}>
+        {payload.message}
+      </div>
     </div>
 
     <div style={styles.courseList}>
+
       {payload.courses.map((course, index) => {
-        const courseName = course.course_name || course.title || "Recommended course";
-        const university = course.university || "University details available on request";
-        const country = course.country || "Country details available on request";
-        const link = course.course_link;
-        const iconLink = course.icon_link || course.icon_url;
-        const visual = getCourseVisual(courseName);
-        const degreeLabel = getDegreeLabel(course);
+
+        const courseName =
+          course.course_name
+          || course.title
+          || "Recommended course";
+
+        // ✅ UNIVERSITY
+        const university =
+          course.university_name
+          || course.university
+          || "University details available on request";
+
+        // ✅ COUNTRY / LOCATION
+        const country =
+          course.location
+          || course.country
+          || "Country details available on request";
+
+        // ✅ LINK
+        const link =
+          course.course_link;
+
+        // ✅ IMAGE
+        const iconLink =
+          course.icon_link
+          || course.icon_url;
+
+        // ✅ VISUAL
+        const visual =
+          getCourseVisual(courseName);
+
+        // ✅ DEGREE
+        const degreeLabel =
+          getDegreeLabel(course);
 
         const content = (
           <>
-            <div style={{ ...styles.courseVisual, background: visual.bg }}>
+
+            {/* LEFT VISUAL */}
+            <div
+              style={{
+                ...styles.courseVisual,
+                background: visual.bg
+              }}
+            >
+
               {iconLink ? (
+
                 <img
                   src={iconLink}
                   alt=""
@@ -174,28 +217,120 @@ const renderRecommendationCards = (payload) => (
                   loading="lazy"
                   referrerPolicy="no-referrer"
                 />
+
               ) : (
-                <span style={{ ...styles.courseVisualIcon, color: visual.color }}>
+
+                <span
+                  style={{
+                    ...styles.courseVisualIcon,
+                    color: visual.color
+                  }}
+                >
                   {visual.icon}
                 </span>
+
               )}
+
             </div>
+
+            {/* COURSE CONTENT */}
             <div style={styles.courseContent}>
-              <div style={styles.courseName}>{courseName}</div>
-              <div style={styles.courseLocation}>{university}, {country}</div>
-              <div style={styles.degreeBadge}>{degreeLabel}</div>
-              <div style={styles.courseReason}>
-                {course.reason || "Recommended from available university program data."}
+
+              {/* COURSE NAME */}
+              <div style={styles.courseName}>
+                {courseName}
               </div>
+
+              {/* UNIVERSITY */}
+              <div style={styles.courseLocation}>
+                🏫 {university}
+              </div>
+
+              {/* LOCATION */}
+              <div style={styles.courseLocation}>
+                📍 {country}
+              </div>
+
+              {/* STUDY LEVEL */}
+              <div style={styles.degreeBadge}>
+                {
+                  typeof course.study_level === "string"
+                    ? course.study_level
+                    : degreeLabel
+                }
+              </div>
+
+              {/* STREAM */}
+              <div style={styles.courseReason}>
+                📚 Stream: {
+
+                  Array.isArray(course.study_stream)
+                    ? course.study_stream.join(", ")
+
+                    : Array.isArray(course.study_streams)
+                    ? course.study_streams.join(", ")
+
+                    : course.study_stream
+                    || "N/A"
+
+                }
+              </div>
+
+              {/* INTAKES */}
+              <div style={styles.courseReason}>
+                🗓️ Intakes: {
+
+                  Array.isArray(course.intakes)
+                    ? course.intakes.join(", ")
+
+                    : course.intakes
+                    || "N/A"
+
+                }
+              </div>
+
+              {/* DURATION */}
+              <div style={styles.courseReason}>
+                ⏳ Duration: {
+
+                  typeof course.duration === "object"
+                    ? "N/A"
+                    : course.duration || "N/A"
+
+                }
+              </div>
+
+              {/* FEES */}
+              <div style={styles.courseReason}>
+                💰 Fees: {
+
+                  typeof course.fees === "object"
+                    ? "N/A"
+                    : course.fees || "N/A"
+
+                }
+              </div>
+
             </div>
+
+            {/* RIGHT SIDE BUTTONS */}
             <div style={styles.cardTools}>
-              <div style={styles.bookmarkIcon}>□</div>
-              <div style={styles.courseAction}>{">"}</div>
+
+              <div style={styles.bookmarkIcon}>
+                □
+              </div>
+
+              <div style={styles.courseAction}>
+                {">"}
+              </div>
+
             </div>
+
           </>
         );
 
         return link ? (
+
           <a
             key={`${courseName}-${index}`}
             href={link}
@@ -205,16 +340,24 @@ const renderRecommendationCards = (payload) => (
           >
             {content}
           </a>
+
         ) : (
-          <div key={`${courseName}-${index}`} style={styles.courseCard}>
+
+          <div
+            key={`${courseName}-${index}`}
+            style={styles.courseCard}
+          >
             {content}
           </div>
+
         );
+
       })}
+
     </div>
+
   </div>
 );
-
 export default function Chatbot() {
   const [isTyping, setIsTyping] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
@@ -234,6 +377,7 @@ export default function Chatbot() {
 
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [loadingOptions, setLoadingOptions] = useState(false);
 
   const chatRef = useRef(null);
   const containerRef = useRef(null);
@@ -264,7 +408,11 @@ export default function Chatbot() {
     if (!step) return;
     runStep();
   }, [step]);
-
+  useEffect(() => {
+  if (flow[step]?.save === "mobile") {
+    setInput("+91 ");
+  }
+}, [step]);
   const runStep = async () => {
     const node = flow[step];
     if (!node) return;
@@ -387,6 +535,7 @@ if (node.options) {
   setVisibleOptions(node.options.slice(0, PAGE_SIZE));
 }
     if (node.type === "dynamic") {
+      setLoadingOptions(true);
       setLoading(true);
       try {
         const data = await node.action(context);
@@ -406,6 +555,7 @@ if (node.options) {
           { bot: "❌ Failed to load options" },
         ]);
       }
+      setLoadingOptions(false);
       setLoading(false);
     }
 
@@ -739,6 +889,7 @@ if (!match || isUserQuery(inputText)) {
     <span
       style={{ cursor: "pointer", fontSize: 18 }}
       onClick={() => {
+  
   setMessages([]);
   setContext({});
   setOptions([]);
@@ -876,20 +1027,29 @@ if (!match || isUserQuery(inputText)) {
           <div ref={chatRef}></div>
         </div>
 
-        <div style={styles.inputBar}>
-          <input
-            style={styles.input}
-            value={input}
-            placeholder="Type or select option..."
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleInput();
-            }}
-          />
-          <button style={styles.sendBtn} onClick={handleInput}>
-            Send
-          </button>
-        </div>
+        {(!loadingOptions &&
+  ((!allOptions.length && flow[step]?.save) ||
+    flow[step]?.end)) && (
+  <div style={styles.inputBar}>
+    <input
+      style={styles.input}
+      value={input}
+      placeholder="Type or select option..."
+      onChange={(e) => setInput(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") handleInput();
+      }}
+    />
+
+    <button
+      style={styles.sendBtn}
+      onClick={handleInput}
+    >
+      Send
+    </button>
+  </div>
+)}
+
       </div>
     )}
   </>

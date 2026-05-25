@@ -148,17 +148,7 @@ student_country: {
       value: c.id,
     }));
   },
-  next: "student_budget",
-},
-
-student_budget: {
-  message: "What is your budget?",
-  save: "budget",
-  options: [
-    { label: "Low (<10L/year)", next: "student_ielts" },
-    { label: "Medium (10–25L/year)", next: "student_ielts" },
-    { label: "High (25L+)", next: "student_ielts" },
-  ],
+  next: "student_ielts",
 },
 
 student_ielts: {
@@ -174,21 +164,11 @@ student_intake: {
   message: "When do you want to start?",
   save: "intake",
   options: [
-    { label: "Feb 2026", next: "student_goal" },
-    { label: "July 2026", next: "student_goal" },
+    { label: "Feb 2026", next: "fetch_recommendations"},
+    { label: "July 2026", next: "fetch_recommendations" },
   ],
 },
 
-student_goal: {
-  message: "What is your goal?",
-  save: "goal",
-  options: [
-    { label: "Job abroad", next: "fetch_recommendations" },
-    { label: "PR", next: "fetch_recommendations" },
-    { label: "Higher studies", next: "fetch_recommendations" },
-    { label: "Career switch", next: "fetch_recommendations" },
-  ],
-},
 
 // 🚀 🔥 FIXED API STEP
 fetch_recommendations: {
@@ -294,6 +274,7 @@ restart_flow: {
 
 end: {
   message: "🎉 Thank you! We’ll help you further via chat.",
+   end: true,
 },
 // ---- PR ----
 
