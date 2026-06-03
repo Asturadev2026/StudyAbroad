@@ -1,7 +1,9 @@
 import {
   getCountries,
   createLead,
+  getStudyLevels,
 } from "../services/api";
+
 
 const flow = {
   // =========================
@@ -61,10 +63,21 @@ const flow = {
   },
 
   visa_duration: {
-    message: "Enter your current visa duration",
-    save: "visaDuration",
-    next: "onshore_visa_type",
+  message: "Enter your current visa duration (in years)",
+  save: "visaDuration",
+
+  validate: (value) => {
+    const num = Number(value);
+
+    if (!value.trim() || isNaN(num) || num <= 0) {
+      return "Please provide current visa duration in number of years";
+    }
+
+    return true;
   },
+
+  next: "onshore_visa_type",
+},
 
   onshore_visa_type: {
     message: "Select your current visa type",
@@ -114,13 +127,19 @@ offshore_visa_type: {
 
 student_qualification: {
   message: "What is your highest qualification?",
+  type: "dynamic",
   save: "qualification",
-  options: [
-    { label: "12th", next: "student_field" },
-    { label: "Graduate/Bachelors", next: "student_field" },
-    { label: "Post Graduate/Masters", next: "student_field" },
-    { label: "Diploma", next: "student_field" },
-  ],
+  
+  action: async () => {
+    const data = await getStudyLevels();
+
+    return data.map((level) => ({
+      label: level.title,
+      value: level.id,
+    }));
+  },
+
+  next: "student_field",
 },
 
 student_field: {
@@ -624,18 +643,21 @@ coaching_goal: {
   // =========================
 
   submit_lead: {
-    message: "Submitting your details...",
-    type: "api",
-    action: async (context) => {
-      return await createLead(context);
-    },
-    next: "success",
+  message: "Submitting your details...",
+  type: "api",
+
+  action: async (payload) => {
+    return await createLead(payload);
   },
+
+  next: "success",
+},
 
   success: {
     message:
       "✅ Form submitted successfully. Counsellor will contact you shortly.",
     end: true,
+     aiMode: true,
   },
 };
 

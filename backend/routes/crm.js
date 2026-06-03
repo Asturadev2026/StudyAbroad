@@ -3,8 +3,8 @@ import {
   getCountries,
   getStatesByCountry,
   createLead,
+  getStudyLevels,
 } from "../services/crmService.js";
-
 const router = express.Router();
 
 // ✅ GET COUNTRIES
@@ -53,5 +53,16 @@ router.post("/lead", async (req, res) => {
     res.status(500).json({ error: "Failed to create lead" });
   }
 });
-
+// ✅ GET STUDY LEVELS
+router.get("/study-levels", async (req, res) => {
+  try {
+    const data = await getStudyLevels();
+    res.json(data);
+  } catch (err) {
+    console.error("❌ Error fetching study levels:", err);
+    res.status(500).json({
+      error: "Failed to fetch study levels",
+    });
+  }
+});
 export default router;

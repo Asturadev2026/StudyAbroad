@@ -14,7 +14,7 @@ export const getStates = async (countryId) => {
   return res.json();
 };
 
-export const createLead = async (data) => {
+export const createLead = async (data, messages = []) => {
   const res = await fetch(`${BASE_URL}/lead`, {
     method: "POST",
     headers: {
@@ -23,4 +23,16 @@ export const createLead = async (data) => {
     body: JSON.stringify(data),
   });
   return res.json();
+};
+export const getStudyLevels = async () => {
+  const API_URL =
+    import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+
+  const response = await fetch(`${API_URL}/study-levels`);
+
+  if (!response.ok) {
+    throw new Error("Failed to fetch study levels");
+  }
+
+  return response.json();
 };

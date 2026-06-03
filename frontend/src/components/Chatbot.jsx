@@ -25,6 +25,31 @@ const streamText = (text, callback) => {
     }
   }, 25); // 🔥 human-visible speed
 };
+const generateChatSummary = (messages, context) => {
+  const transcript = messages
+    .map((m) => {
+      if (m.user) return `User: ${m.user}`;
+      if (m.bot) return `Bot: ${m.bot}`;
+      return null;
+    })
+    .filter(Boolean)
+    .join("\n");
+
+  return `
+Lead Information
+
+Name: ${context.name || ""}
+Email: ${context.email || ""}
+Phone: ${context.mobile || ""}
+Visa Type: ${context.visaType || ""}
+Qualification: ${context.qualification || ""}
+Countries: ${(context.countryIds || []).join(", ")}
+
+Conversation
+
+${transcript}
+`.trim();
+};
 
 const renderBotText = (text) => {
   const urlRegex = /(https?:\/\/[^\s]+)/g;
@@ -379,15 +404,123 @@ export default function Chatbot() {
   const [loading, setLoading] = useState(false);
   const [loadingOptions, setLoadingOptions] = useState(false);
 
+  const recognitionRef = useRef(null);
+  const [voiceMode, setVoiceMode] = useState(false);
+const [isListening, setIsListening] = useState(false);
   const chatRef = useRef(null);
   const containerRef = useRef(null);
+  const cleanForVoice = (text) => {
+  return String(text)
 
+    // remove URLs
+    .replace(/https?:\/\/[^\s]+/g, "")
+
+    // remove emojis
+    .replace(
+      /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}]/gu,
+      ""
+    )
+
+    // remove markdown
+    .replace(/\*\*/g, "")
+
+    .replace(/•/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+};
+
+const speak = (text) => {
+  if (!voiceMode) return;
+  if (!isOpen) return;
+  if (!text) return;
+
+  speechSynthesis.cancel();
+
+  const utterance = new SpeechSynthesisUtterance(
+    cleanForVoice(text)
+  );
+
+  utterance.rate = 1;
+  utterance.pitch = 1;
+
+  speechSynthesis.speak(utterance);
+};
+  // 🔥 PERSIST CHAT
+useEffect(() => {
+  localStorage.setItem(
+    "studyabroad_chat",
+    JSON.stringify({
+      messages,
+      context,
+      step,
+    })
+  );
+}, [messages, context, step]);
   useEffect(() => {
     if (isOpen && step === null) {
       setStep("start");
     }
   }, [isOpen]);
+  useEffect(() => {
+  const SpeechRecognition =
+    window.SpeechRecognition ||
+    window.webkitSpeechRecognition;
 
+  if (!SpeechRecognition) {
+    console.log("Speech recognition not supported");
+    return;
+  }
+
+  const recognition =
+    new SpeechRecognition();
+
+  recognition.continuous = false;
+
+  recognition.interimResults = false;
+
+  recognition.lang = "en-US";
+
+  recognition.onstart = () => {
+    setIsListening(true);
+  };
+
+  recognition.onend = () => {
+    setIsListening(false);
+  };
+
+  recognition.onresult = (event) => {
+
+    const transcript =
+      event.results[0][0].transcript;
+
+    setInput(transcript);
+
+    setTimeout(() => {
+      document
+        .querySelector("#voice-send-trigger")
+        ?.click();
+    }, 200);
+  };
+
+  recognitionRef.current = recognition;
+
+}, []);
+useEffect(() => {
+  const saved = localStorage.getItem("studyabroad_chat");
+
+  if (!saved) return;
+
+  try {
+    const parsed = JSON.parse(saved);
+
+    if (parsed.messages) setMessages(parsed.messages);
+    if (parsed.context) setContext(parsed.context);
+    if (parsed.step) setStep(parsed.step);
+
+  } catch (err) {
+    console.error("Failed to restore chat", err);
+  }
+}, []);
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (
@@ -395,7 +528,9 @@ export default function Chatbot() {
         containerRef.current &&
         !containerRef.current.contains(event.target)
       ) {
-        setIsOpen(false);
+        speechSynthesis.cancel();
+setVoiceMode(false);
+setIsOpen(false);
       }
     };
 
@@ -429,7 +564,7 @@ export default function Chatbot() {
         typeof node.message === "function"
           ? node.message(context)
           : node.message;
-
+      
       setMessages((prev) => [...prev, {
   bot: msg,
   time: new Date().toLocaleTimeString([], {
@@ -563,7 +698,17 @@ if (node.options) {
   setLoading(true);
 
   try {
-    const data = await node.action(context);
+
+    let payload = context;
+
+    if (step === "submit_lead") {
+      payload = {
+        ...context,
+        summary: generateChatSummary(messages, context),
+      };
+    }
+
+    const data = await node.action(payload);
 
     console.log("🔥 API RESULT:", data);
 
@@ -661,7 +806,7 @@ if (node.options) {
   }),
 },
     ]);
-
+    
     if (node.save) {
       setContext((prev) => ({
         ...prev,
@@ -749,6 +894,9 @@ const handleAIFallback = async (inputText) => {
 
     // 🔥 SMALL DELAY BEFORE STREAMING (smooth UX)
     setTimeout(() => {
+      if (voiceMode) {
+  speak(data.answer);
+}
       streamText(data.answer, (partial, done) => {
         setMessages((prev) => {
           const updated = [...prev];
@@ -756,15 +904,7 @@ const handleAIFallback = async (inputText) => {
           return updated;
         });
 
-        // 🔥 RESTART FLOW AFTER STREAMING FINISHES
-        if (done) {
-  setTimeout(() => {
-    setStep(null);     // 🔥 RESET FIRST
-    setTimeout(() => {
-      setStep("start"); // 🔥 THEN START FLOW
-    }, 0);
-  }, 800);
-}
+    
       });
     }, 200);
 
@@ -790,7 +930,12 @@ const handleAIFallback = async (inputText) => {
     if (!input.trim()) return;
      const inputText = input;  
   setInput("");
-     const node = step ? flow[step] : null;
+     const node =
+   flow[step]?.aiMode
+    ? null
+    : step
+      ? flow[step]
+      : null;
     if (!node) {
   await handleAIFallback(inputText);
 
@@ -843,7 +988,25 @@ if (!match || isUserQuery(inputText)) {
     }
 
     setMessages((prev) => [...prev, { user: input }]);
+    // 🔥 FIELD VALIDATION
+if (node.validate) {
+  const result = node.validate(inputText);
 
+  if (result !== true) {
+    setMessages((prev) => [
+      ...prev,
+      {
+        bot: result,
+        time: new Date().toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+      },
+    ]);
+
+    return;
+  }
+}
     if (node.save) {
       setContext((prev) => ({
         ...prev,
@@ -889,7 +1052,7 @@ if (!match || isUserQuery(inputText)) {
     <span
       style={{ cursor: "pointer", fontSize: 18 }}
       onClick={() => {
-  
+  localStorage.removeItem("studyabroad_chat");
   setMessages([]);
   setContext({});
   setOptions([]);
@@ -1042,11 +1205,49 @@ if (!match || isUserQuery(inputText)) {
     />
 
     <button
-      style={styles.sendBtn}
-      onClick={handleInput}
-    >
-      Send
-    </button>
+  id="voice-send-trigger"
+  style={styles.sendBtn}
+  onClick={handleInput}
+>
+  Send
+</button>
+
+<button
+ style={{
+  width: "42px",
+  height: "42px",
+  borderRadius: "50%",
+  border: "none",
+  cursor: "pointer",
+
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+
+  background: isListening
+    ? "#ef4444"
+    : "#0B1F3A",
+
+  color: "#fff",
+
+  transition: "all .2s ease"
+}}
+  onClick={() => {
+  setVoiceMode(true);
+  recognitionRef.current?.start();
+}}
+>
+  <svg
+  xmlns="http://www.w3.org/2000/svg"
+  width="18"
+  height="18"
+  fill="currentColor"
+  viewBox="0 0 16 16"
+>
+  <path d="M8 11a3 3 0 0 0 3-3V3a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3z"/>
+  <path d="M5 8a.5.5 0 0 1 1 0 2 2 0 0 0 4 0 .5.5 0 0 1 1 0 3 3 0 0 1-2.5 2.958V13h2a.5.5 0 0 1 0 1h-5a.5.5 0 0 1 0-1h2v-2.042A3 3 0 0 1 5 8z"/>
+</svg>
+</button>
   </div>
 )}
 
