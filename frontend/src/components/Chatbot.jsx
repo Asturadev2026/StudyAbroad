@@ -385,9 +385,15 @@ const renderRecommendationCards = (payload) => (
 );
 export default function Chatbot() {
   const [isTyping, setIsTyping] = useState(false);
-  const [isOpen, setIsOpen] = useState(false);
-  const [step, setStep] = useState(null);
-  const [messages, setMessages] = useState([]);
+const [isOpen, setIsOpen] = useState(false);
+
+const [step, setStep] = useState(null);
+
+const [chatLoaded, setChatLoaded] = useState(false);
+const [isRestoring, setIsRestoring] = useState(true);
+const [hydrated, setHydrated] = useState(false);
+const [restoredFromStorage, setRestoredFromStorage] = useState(false);
+const [messages, setMessages] = useState([]);
   const [context, setContext] = useState({});
   const [options, setOptions] = useState([]);
 
@@ -447,7 +453,14 @@ const speak = (text) => {
 };
   // 🔥 PERSIST CHAT
 useEffect(() => {
-  localStorage.setItem(
+  if (!hydrated) return;
+
+  console.log("SAVING CHAT", {
+    messagesCount: messages.length,
+    step,
+  });
+
+  sessionStorage.setItem(
     "studyabroad_chat",
     JSON.stringify({
       messages,
@@ -455,12 +468,16 @@ useEffect(() => {
       step,
     })
   );
-}, [messages, context, step]);
-  useEffect(() => {
-    if (isOpen && step === null) {
-      setStep("start");
-    }
-  }, [isOpen]);
+}, [messages, context, step, hydrated]);
+ useEffect(() => {
+  if (
+    chatLoaded &&
+    isOpen &&
+    step === null
+  ) {
+    setStep("start");
+  }
+}, [isOpen, chatLoaded, step]);
   useEffect(() => {
   const SpeechRecognition =
     window.SpeechRecognition ||
@@ -506,20 +523,30 @@ useEffect(() => {
 
 }, []);
 useEffect(() => {
-  const saved = localStorage.getItem("studyabroad_chat");
+  const saved = sessionStorage.getItem("studyabroad_chat");
 
-  if (!saved) return;
+  if (saved) {
+    try {
+      const parsed = JSON.parse(saved);
 
-  try {
-    const parsed = JSON.parse(saved);
+      console.log("RESTORED CHAT", parsed);
 
-    if (parsed.messages) setMessages(parsed.messages);
-    if (parsed.context) setContext(parsed.context);
-    if (parsed.step) setStep(parsed.step);
+      setMessages(parsed.messages || []);
+      setContext(parsed.context || {});
+      setStep(parsed.step || null);
 
-  } catch (err) {
-    console.error("Failed to restore chat", err);
+      setRestoredFromStorage(true);
+    } catch (err) {
+      console.error(err);
+    }
   }
+
+  setChatLoaded(true);
+
+  setTimeout(() => {
+    setIsRestoring(false);
+    setHydrated(true);
+  }, 100);
 }, []);
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -539,10 +566,21 @@ setIsOpen(false);
       document.removeEventListener("mousedown", handleClickOutside);
   }, [isOpen]);
 
-  useEffect(() => {
-    if (!step) return;
-    runStep();
-  }, [step]);
+useEffect(() => {
+  if (!step) return;
+
+  if (isRestoring) return;
+
+  if (restoredFromStorage) {
+    console.log("SKIPPING runStep because chat was restored");
+
+    setRestoredFromStorage(false);
+
+    return;
+  }
+
+  runStep();
+}, [step, isRestoring, restoredFromStorage]);
   useEffect(() => {
   if (flow[step]?.save === "mobile") {
     setInput("+91 ");
@@ -1052,7 +1090,7 @@ if (node.validate) {
     <span
       style={{ cursor: "pointer", fontSize: 18 }}
       onClick={() => {
-  localStorage.removeItem("studyabroad_chat");
+  sessionStorage.removeItem("studyabroad_chat");
   setMessages([]);
   setContext({});
   setOptions([]);
