@@ -10,10 +10,13 @@ const cleanText = (text) => {
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 };
-const streamText = (text, callback) => {
+const streamText = (text, callback, intervalRef) => {
   let i = 0;
 
   const interval = setInterval(() => {
+    if (intervalRef) {
+  intervalRef.current = interval;
+}
     i += 1; // 🔥 slower typing
 
     const isDone = i >= text.length;
@@ -392,7 +395,7 @@ const [step, setStep] = useState(null);
 const [chatLoaded, setChatLoaded] = useState(false);
 const [isRestoring, setIsRestoring] = useState(true);
 const [hydrated, setHydrated] = useState(false);
-const [restoredFromStorage, setRestoredFromStorage] = useState(false);
+const restoredRef = useRef(false);
 const [messages, setMessages] = useState([]);
   const [context, setContext] = useState({});
   const [options, setOptions] = useState([]);
@@ -402,6 +405,7 @@ const [messages, setMessages] = useState([]);
   const [page, setPage] = useState(0);
 
   const [selectedItems, setSelectedItems] = useState([]);
+  const selectedItemsRef = useRef([]);
   const [optionSearch, setOptionSearch] = useState("");
 
   const PAGE_SIZE = 5;
@@ -415,6 +419,10 @@ const [messages, setMessages] = useState([]);
 const [isListening, setIsListening] = useState(false);
   const chatRef = useRef(null);
   const containerRef = useRef(null);
+  const allOptionsRef = useRef([]);
+const stepRef = useRef(null);
+const streamIntervalRef = useRef(null);
+const timeoutRefs = useRef([]);
   const cleanForVoice = (text) => {
   return String(text)
 
@@ -435,19 +443,34 @@ const [isListening, setIsListening] = useState(false);
     .trim();
 };
 
-const speak = (text) => {
+const speak = (text, autoListen = true) => {
   if (!voiceMode) return;
   if (!isOpen) return;
   if (!text) return;
 
   speechSynthesis.cancel();
 
-  const utterance = new SpeechSynthesisUtterance(
-    cleanForVoice(text)
-  );
+  const utterance =
+    new SpeechSynthesisUtterance(
+      cleanForVoice(text)
+    );
 
   utterance.rate = 1;
   utterance.pitch = 1;
+
+  utterance.onend = () => {
+  if (
+    autoListen &&
+    recognitionRef.current &&
+    !isListening
+  ) {
+    try {
+      recognitionRef.current.start();
+    } catch (e) {
+      console.log("Recognition already running");
+    }
+  }
+};
 
   speechSynthesis.speak(utterance);
 };
@@ -470,14 +493,37 @@ useEffect(() => {
   );
 }, [messages, context, step, hydrated]);
  useEffect(() => {
-  if (
-    chatLoaded &&
-    isOpen &&
-    step === null
-  ) {
-    setStep("start");
-  }
+ if (
+  chatLoaded &&
+  isOpen &&
+  step === null
+) {
+  setVoiceMode(true);
+  setStep("start");
+}
 }, [isOpen, chatLoaded, step]);
+useEffect(() => {
+  if (
+    isOpen &&
+    messages.length === 1 &&
+    messages[0]?.bot
+  ) {
+
+    setVoiceMode(true);
+
+    setTimeout(() => {
+      speak(messages[0].bot);
+    }, 300);
+
+  }
+}, [messages, isOpen]);
+useEffect(() => {
+  allOptionsRef.current = allOptions;
+}, [allOptions]);
+
+useEffect(() => {
+  stepRef.current = step;
+}, [step]);
   useEffect(() => {
   const SpeechRecognition =
     window.SpeechRecognition ||
@@ -494,8 +540,8 @@ useEffect(() => {
   recognition.continuous = false;
 
   recognition.interimResults = false;
-
-  recognition.lang = "en-US";
+   recognition.maxAlternatives = 5;
+  recognition.lang = "en-IN";
 
   recognition.onstart = () => {
     setIsListening(true);
@@ -507,17 +553,98 @@ useEffect(() => {
 
   recognition.onresult = (event) => {
 
-    const transcript =
-      event.results[0][0].transcript;
+  console.log("FULL RESULTS", event.results);
 
-    setInput(transcript);
+const transcript =
+  event.results[0][0].transcript;
 
-    setTimeout(() => {
-      document
-        .querySelector("#voice-send-trigger")
-        ?.click();
-    }, 200);
+console.log("RAW TRANSCRIPT:", transcript);
+
+
+  const currentNode =
+  flow[stepRef.current];
+
+let normalizedTranscript = transcript;
+
+if (currentNode?.save === "visaDuration") {
+
+  const lower = transcript.toLowerCase().trim();
+
+  const numberWords = {
+    zero: "0",
+    one: "1",
+    two: "2",
+    three: "3",
+    four: "4",
+    five: "5",
+    six: "6",
+    seven: "7",
+    eight: "8",
+    nine: "9",
+    ten: "10"
   };
+
+  normalizedTranscript =
+    numberWords[lower] ||
+    lower.match(/\d+/)?.[0] ||
+    "";
+
+  console.log(
+    "VISA DURATION DETECTED:",
+    normalizedTranscript
+  );
+}
+
+  console.log(
+    "VOICE HEARD:",
+    transcript
+  );
+
+  if (
+  currentNode?.save === "visaDuration"
+) {
+  handleInput(normalizedTranscript);
+  return;
+}
+
+  if (
+  allOptionsRef.current.length > 0 &&
+  currentNode?.save !== "visaDuration"
+) {
+   console.log(
+  "CURRENT OPTIONS:",
+  allOptionsRef.current
+);
+    const match =
+  matchUserInput(normalizedTranscript);
+
+    console.log(
+      "MATCH FOUND:",
+      match
+    );
+
+   if (match) {
+  handleOptionClick(match);
+  return;
+}
+
+setTimeout(() => {
+  console.log({
+  step: stepRef.current,
+  currentSave: currentNode?.save,
+  transcript,
+  normalizedTranscript,
+  optionsLength: allOptionsRef.current.length
+});
+  handleInput(normalizedTranscript);
+}, 100);
+return;
+  }
+
+  setTimeout(() => {
+    handleInput(normalizedTranscript);
+  }, 200);
+};
 
   recognitionRef.current = recognition;
 
@@ -531,11 +658,42 @@ useEffect(() => {
 
       console.log("RESTORED CHAT", parsed);
 
-      setMessages(parsed.messages || []);
-      setContext(parsed.context || {});
-      setStep(parsed.step || null);
+     setMessages(parsed.messages || []);
+setContext(parsed.context || {});
+setStep(parsed.step || null);
 
-      setRestoredFromStorage(true);
+/* RESTORE OPTIONS */
+const restoredNode = flow[parsed.step];
+
+if (restoredNode?.options) {
+  setOptions(restoredNode.options);
+  setAllOptions(restoredNode.options);
+  setVisibleOptions(
+    restoredNode.options.slice(0, PAGE_SIZE)
+  );
+}
+
+/* ADD THIS BLOCK HERE */
+if (restoredNode?.type === "dynamic") {
+  restoredNode
+    .action(parsed.context || {})
+    .then((data) => {
+      const formatted = data.map((o) => ({
+        label: o.label || o.name,
+        value: o.value || o.id,
+        next: restoredNode.next,
+      }));
+
+      setOptions(formatted);
+      setAllOptions(formatted);
+      setVisibleOptions(
+        formatted.slice(0, PAGE_SIZE)
+      );
+    })
+    .catch(console.error);
+}
+
+restoredRef.current = true;
     } catch (err) {
       console.error(err);
     }
@@ -571,21 +729,69 @@ useEffect(() => {
 
   if (isRestoring) return;
 
-  if (restoredFromStorage) {
-    console.log("SKIPPING runStep because chat was restored");
+  if (restoredRef.current) {
+    console.log("Chat restored. Not running runStep.");
 
-    setRestoredFromStorage(false);
+    restoredRef.current = false;
 
     return;
   }
 
   runStep();
-}, [step, isRestoring, restoredFromStorage]);
+}, [step, isRestoring]);
   useEffect(() => {
   if (flow[step]?.save === "mobile") {
     setInput("+91 ");
   }
 }, [step]);
+const hardResetChat = () => {
+
+  // STOP BOT SPEAKING
+  speechSynthesis.cancel();
+
+  // STOP MIC
+  try {
+    recognitionRef.current?.stop();
+  } catch (e) {}
+
+  setIsListening(false);
+  setVoiceMode(false);
+
+  // STOP STREAMING TEXT
+  if (streamIntervalRef.current) {
+    clearInterval(streamIntervalRef.current);
+  }
+
+  // CLEAR TIMEOUTS
+  timeoutRefs.current.forEach(clearTimeout);
+  timeoutRefs.current = [];
+
+  // CLEAR STORAGE
+  sessionStorage.removeItem("studyabroad_chat");
+
+  // RESET STATE
+  setMessages([]);
+  setContext({});
+  setOptions([]);
+  setAllOptions([]);
+  setVisibleOptions([]);
+  setSelectedItems([]);
+  setPage(0);
+  setOptionSearch("");
+  setInput("");
+  setLoading(false);
+  setLoadingOptions(false);
+  setIsTyping(false);
+
+  restoredRef.current = false;
+
+  // RESTART FLOW
+  setStep(null);
+
+  setTimeout(() => {
+    setStep("start");
+  }, 50);
+};
   const runStep = async () => {
     const node = flow[step];
     if (!node) return;
@@ -597,20 +803,31 @@ useEffect(() => {
     setSelectedItems([]);
     setOptionSearch("");
 
-    if (node.message) {
-      const msg =
-        typeof node.message === "function"
-          ? node.message(context)
-          : node.message;
-      
-      setMessages((prev) => [...prev, {
-  bot: msg,
-  time: new Date().toLocaleTimeString([], {
-    hour: "2-digit",
-    minute: "2-digit",
-  }),
-}]);
-    }
+    let msg = "";
+
+if (node.message) {
+  msg =
+    typeof node.message === "function"
+      ? node.message(context)
+      : node.message;
+
+  setMessages((prev) => [
+    ...prev,
+    {
+      bot: msg,
+      time: new Date().toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+    },
+  ]);
+
+  if (voiceMode) {
+    setTimeout(() => {
+      speak(msg);
+    }, 300);
+  }
+}
     // ✅ HANDLE CUSTOM RENDER STEP (NEW)
 if (node.type === "custom") {
   try {
@@ -658,7 +875,9 @@ setTimeout(() => {
   setMessages((prev) => [...prev, tempMessage]);
 
   setTimeout(() => {
-    streamText(output, (partial, done) => {
+  streamText(
+    output,
+    (partial, done) => {
       setMessages((prev) => {
         const updated = [...prev];
         updated[updated.length - 1].bot = partial;
@@ -668,8 +887,10 @@ setTimeout(() => {
       if (done && node.next) {
         setStep(node.next);
       }
-    });
-  }, 200);
+    },
+    streamIntervalRef
+  );
+}, 200);
 
 }, 800); // 👈 increase dots visibility (was 500) // delay so dots are visible
 
@@ -696,9 +917,27 @@ setTimeout(() => {
 // ✅ AUTO MOVE TO NEXT IF NO OPTIONS / NO TYPE
 // ✅ Only auto-skip if it's a pure routing node
 if (!node.options && !node.type && !node.save && node.next) {
-  setTimeout(() => {
-    setStep(node.next);
-  }, 500);
+
+  if (voiceMode && msg) {
+
+    const estimatedTime =
+      Math.max(
+        3000,
+        msg.split(" ").length * 450
+      );
+
+    setTimeout(() => {
+      setStep(node.next);
+    }, estimatedTime);
+
+  } else {
+
+    setTimeout(() => {
+      setStep(node.next);
+    }, 500);
+
+  }
+
   return;
 }
 
@@ -804,7 +1043,11 @@ if (node.options) {
   const isSearchableOptions = Boolean(flow[step]?.searchable || flow[step]?.multi);
 
   const handleOptionClick = (option) => {
-    const node = flow[step];
+    const currentStep =
+  stepRef.current || step;
+
+const node =
+  flow[currentStep];
 
     if (node.multi) {
       if (selectedItems.find((i) => i.value === option.value)) return;
@@ -819,7 +1062,10 @@ if (node.options) {
 
       const updated = [...selectedItems, option];
       setSelectedItems(updated);
-
+      selectedItemsRef.current = updated;
+       if (voiceMode) {
+  speak(`You selected ${option.label}`, false);
+}
       setMessages((prev) => [
         ...prev,
         {
@@ -853,18 +1099,34 @@ if (node.options) {
     }
 
     setOptions([]);
-    setOptionSearch("");
-    setStep(option.next);
+setAllOptions([]);        // ADD THIS
+setVisibleOptions([]);    // ADD THIS
+setOptionSearch("");
+setStep(option.next);
   };
 
-  const matchUserInput = (input) => {
-  const lower = input.toLowerCase();
-
-  return allOptions.find(
-    (opt) =>
-      opt.label.toLowerCase().includes(lower) ||
-      lower.includes(opt.label.toLowerCase())
+ const matchUserInput = (input) => {
+  console.log(
+    "OPTIONS:",
+    allOptionsRef.current.map(o => o.label)
   );
+
+  const normalizedInput = input
+    .toLowerCase()
+    .replace(/\s+/g, "")
+    .trim();
+
+  return allOptionsRef.current.find((opt) => {
+    const normalizedOption = opt.label
+      .toLowerCase()
+      .replace(/\s+/g, "")
+      .trim();
+
+    return (
+      normalizedOption.includes(normalizedInput) ||
+      normalizedInput.includes(normalizedOption)
+    );
+  });
 };
 const isUserQuery = (text) => {
   const keywords = [
@@ -935,16 +1197,18 @@ const handleAIFallback = async (inputText) => {
       if (voiceMode) {
   speak(data.answer);
 }
-      streamText(data.answer, (partial, done) => {
-        setMessages((prev) => {
-          const updated = [...prev];
-          updated[updated.length - 1].bot = partial;
-          return updated;
-        });
-
-    
+     streamText(
+    data.answer,
+    (partial, done) => {
+      setMessages((prev) => {
+        const updated = [...prev];
+        updated[updated.length - 1].bot = partial;
+        return updated;
       });
-    }, 200);
+    },
+    streamIntervalRef
+  );
+}, 200);
 
   } catch (err) {
     setIsTyping(false);
@@ -964,15 +1228,27 @@ const handleAIFallback = async (inputText) => {
   setInput(""); // ✅ keep this
 };
 
-  const handleInput = async () => {
-    if (!input.trim()) return;
-     const inputText = input;  
+ const handleInput = async (forcedInput = null) => {
+
+  const inputText = forcedInput ?? input;
+    console.log({
+    step,
+    allOptionsLength: allOptions.length,
+    selectedItemsRef: selectedItemsRef.current,
+    inputText
+  });
+
+  if (!inputText.trim()) return;
+
   setInput("");
-     const node =
-   flow[step]?.aiMode
+    const currentStep =
+  stepRef.current || step;
+
+const node =
+  flow[currentStep]?.aiMode
     ? null
-    : step
-      ? flow[step]
+    : currentStep
+      ? flow[currentStep]
       : null;
     if (!node) {
   await handleAIFallback(inputText);
@@ -982,6 +1258,28 @@ const handleAIFallback = async (inputText) => {
   return;
 }
     if (allOptions.length > 0) {
+      if (
+  node?.multi &&
+  selectedItemsRef.current.length > 0 &&
+  inputText.toLowerCase().includes("continue")
+){
+
+
+  setContext((prev) => ({
+    ...prev,
+    [node.save]: selectedItemsRef.current.map(
+  (i) => i.value
+),
+  }));
+
+  setSelectedItems([]);
+  setOptions([]);
+  setOptionSearch("");
+
+  setStep(node.next);
+
+  return;
+}
       const match = matchUserInput(inputText);
 
   // 🔥 IMPORTANT: If it's a real question → bypass flow
@@ -1025,7 +1323,16 @@ if (!match || isUserQuery(inputText)) {
       } 
     }
 
-    setMessages((prev) => [...prev, { user: input }]);
+    setMessages((prev) => [
+  ...prev,
+  {
+    user: inputText,
+    time: new Date().toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+    }),
+  },
+]);
     // 🔥 FIELD VALIDATION
 if (node.validate) {
   const result = node.validate(inputText);
@@ -1046,18 +1353,18 @@ if (node.validate) {
   }
 }
     if (node.save) {
-      setContext((prev) => ({
-        ...prev,
-        [node.save]: input,
-      }));
-    }
+  setContext((prev) => ({
+    ...prev,
+    [node.save]: inputText,
+  }));
+}
 
     setInput("");
     setOptions([]);
 
     const next =
       typeof node.next === "function"
-        ? node.next(input)
+        ? node.next(inputText)
         : node.next;
 
     setStep(next);
@@ -1074,9 +1381,11 @@ if (node.validate) {
     <div
       style={styles.floatingBtn}
       onClick={(e) => {
-        e.stopPropagation();
-        setIsOpen(true);
-      }}
+  e.stopPropagation();
+
+  setVoiceMode(true);
+  setIsOpen(true);
+}}
     >
       💬
     </div>
@@ -1089,25 +1398,7 @@ if (node.validate) {
 
     <span
       style={{ cursor: "pointer", fontSize: 18 }}
-      onClick={() => {
-  sessionStorage.removeItem("studyabroad_chat");
-  setMessages([]);
-  setContext({});
-  setOptions([]);
-  setOptionSearch("");
-  setAllOptions([]);
-  setVisibleOptions([]);
-  setSelectedItems([]);
-  setPage(0);
-  setOptionSearch("");
-
-  // 🔥 IMPORTANT: force re-init like first load
-  setStep(null);
-
-  setTimeout(() => {
-    setStep("start");
-  }, 0);
-}}
+      onClick={hardResetChat}
     >
       🔄
     </span>
@@ -1228,66 +1519,80 @@ if (node.validate) {
           <div ref={chatRef}></div>
         </div>
 
-        {(!loadingOptions &&
-  ((!allOptions.length && flow[step]?.save) ||
-    flow[step]?.end)) && (
-  <div style={styles.inputBar}>
+        
+ <div
+  style={{
+    ...styles.inputBar,
+    justifyContent: "flex-end",
+  }}
+>
+
+  {(
+  flow[step]?.save === "name" ||
+flow[step]?.save === "email" ||
+flow[step]?.save === "mobile" ||
+flow[step]?.save === "message" ||
+flow[step]?.save === "requirement" ||
+flow[step]?.save === "description" ||
+flow[step]?.save === "details" ||
+flow[step]?.save === "visaDuration" ||
+flow[step]?.aiMode
+) && (
     <input
       style={styles.input}
       value={input}
-      placeholder="Type or select option..."
+      placeholder="Type or speak..."
       onChange={(e) => setInput(e.target.value)}
       onKeyDown={(e) => {
         if (e.key === "Enter") handleInput();
       }}
     />
+  )}
 
-    <button
-  id="voice-send-trigger"
-  style={styles.sendBtn}
-  onClick={handleInput}
->
-  Send
-</button>
-
+  {allOptions.length === 0 && (
 <button
- style={{
-  width: "42px",
-  height: "42px",
-  borderRadius: "50%",
-  border: "none",
-  cursor: "pointer",
+  id="voice-send-trigger"
+    style={styles.sendBtn}
+    onClick={handleInput}
+  >
+    Send
+  </button>)}
 
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
+  <button
+    style={{
+      width: "42px",
+      height: "42px",
+      borderRadius: "50%",
+      border: "none",
+      cursor: "pointer",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      background: isListening
+        ? "#ef4444"
+        : "#0B1F3A",
+      color: "#fff",
+      transition: "all .2s ease",
+    }}
+    onClick={() => {
+      setVoiceMode(true);
+      recognitionRef.current?.start();
+    }}
+  >
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="18"
+      height="18"
+      fill="currentColor"
+      viewBox="0 0 16 16"
+    >
+      <path d="M8 11a3 3 0 0 0 3-3V3a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3z"/>
+      <path d="M5 8a.5.5 0 0 1 1 0 2 2 0 0 0 4 0 .5.5 0 0 1 1 0 3 3 0 0 1-2.5 2.958V13h2a.5.5 0 0 1 0 1h-5a.5.5 0 0 1 0-1h2v-2.042A3 3 0 0 1 5 8z"/>
+    </svg>
+  </button>
 
-  background: isListening
-    ? "#ef4444"
-    : "#0B1F3A",
+</div>
 
-  color: "#fff",
-
-  transition: "all .2s ease"
-}}
-  onClick={() => {
-  setVoiceMode(true);
-  recognitionRef.current?.start();
-}}
->
-  <svg
-  xmlns="http://www.w3.org/2000/svg"
-  width="18"
-  height="18"
-  fill="currentColor"
-  viewBox="0 0 16 16"
->
-  <path d="M8 11a3 3 0 0 0 3-3V3a3 3 0 0 0-6 0v5a3 3 0 0 0 3 3z"/>
-  <path d="M5 8a.5.5 0 0 1 1 0 2 2 0 0 0 4 0 .5.5 0 0 1 1 0 3 3 0 0 1-2.5 2.958V13h2a.5.5 0 0 1 0 1h-5a.5.5 0 0 1 0-1h2v-2.042A3 3 0 0 1 5 8z"/>
-</svg>
-</button>
-  </div>
-)}
 
       </div>
     )}
@@ -1574,13 +1879,16 @@ const styles = {
   },
 
   inputBar: {
-    display: "flex",
-    padding: 10,
-    borderTop: "1px solid #ddd",
-    borderBottomLeftRadius: 25,
-    borderBottomRightRadius: 25,
-    background: "#fff",
-  },
+  display: "flex",
+  justifyContent: "flex-end",
+  alignItems: "center",
+  gap: 8,
+  padding: 10,
+  borderTop: "1px solid #ddd",
+  borderBottomLeftRadius: 25,
+  borderBottomRightRadius: 25,
+  background: "#fff",
+},
 
   input: {
     flex: 1,

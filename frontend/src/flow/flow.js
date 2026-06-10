@@ -251,6 +251,7 @@ show_recommendations: {
     const responseMessage = apiResult.message;
 
     if (courses.length > 0) {
+       
       return {
         type: "recommendations",
         title: "Recommended Courses for You",
@@ -267,6 +268,7 @@ show_recommendations: {
     }
 
     if (courses.length > 0) {
+     
       return `🎓 Recommended Courses for You:
 
 ${responseMessage ? `${responseMessage}\n` : ""}
